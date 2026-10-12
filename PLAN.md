@@ -1,0 +1,193 @@
+# Kế hoạch thực hiện — AIPLab Studio (THCS)
+
+Mục tiêu: giáo viên nhập ngữ cảnh hoặc một bài toán, AI tạo ra thí nghiệm, giáo viên tương tác trực tiếp. Nội dung bám sách giáo khoa Khoa học tự nhiên THCS (lớp 6–9).
+
+Nguồn danh mục: `Bo_tai_lieu_website_mo_phong_vat_ly_THCS.xlsx` (17 thí nghiệm, 10 công thức).
+
+## Quyết định nền
+
+| Hạng mục | Lựa chọn | Trạng thái |
+|---|---|---|
+| Giao diện | Vite + React + TypeScript | Giả định, chờ xác nhận |
+| Vẽ | SVG cho sơ đồ (tia sáng, mạch điện, dụng cụ đo); Canvas cho chuyển động | Chốt |
+| Cơ học vật rắn | Matter.js, chỉ dùng cho mô-đun "Lực và chuyển động" | Chốt |
+| Công thức | KaTeX | Chốt |
+| Kiểm thử | Vitest, bắt buộc cho mọi hàm tính | Chốt |
+| Kiểm tra dữ liệu | Zod (dùng chung cho giao diện và kết quả AI) | Chốt |
+| Biểu đồ | Thành phần tự viết (đã có), không thêm thư viện | Chốt |
+| Backend AI | Node + Hono, khóa API nằm trong `.env` phía máy chủ | Chốt |
+| Nhà cung cấp AI | Đề xuất Claude Sonnet 5.5 | Chờ xác nhận + khóa API |
+| Bộ sách giáo khoa | Chưa biết; tạm gắn nhãn theo lớp và chủ đề | Chờ xác nhận |
+| Trọng trường mặc định | g = 10 N/kg (khớp P ≈ 10m) | Chốt |
+
+## Nguyên tắc thiết kế
+
+1. Mỗi thí nghiệm là một **mẫu** có tham số. Thêm thí nghiệm mới = thêm một thư mục và một dòng đăng ký.
+2. **AI trích dữ kiện, mã nguồn tính toán.** AI chỉ chọn mẫu và điền tham số; mọi kết quả số do hàm đã kiểm thử tính.
+3. Mọi tham số (từ người dùng hay từ AI) đều qua kiểm tra khoảng giá trị và đơn vị.
+4. Đề bài không khớp mẫu nào thì báo "chưa hỗ trợ" và gợi ý mẫu gần nhất. Không dựng bừa.
+5. Thuật ngữ và công thức ở mức THCS: "tốc độ", P ≈ 10m, p = d·h, F_A = d·V, không dùng ký hiệu véc-tơ.
+
+## Cấu trúc thư mục đích
+
+```
+server/
+  index.ts              máy chủ Hono, một điểm cuối POST /api/tao-thi-nghiem
+  prompt.ts             lời nhắc hệ thống, sinh từ danh sách mẫu
+  provider.ts           lớp gọi mô hình (thay được nhà cung cấp) + bản giả lập để phát triển
+src/
+  app/                  App.tsx, định tuyến, bố cục
+  core/
+    types.ts            ExperimentTemplate, ParamDef, OutputDef
+    registry.ts         danh sách mẫu
+    validate.ts         kiểm tra tham số theo ParamDef
+    units.ts            đổi đơn vị (cm² ↔ m², g ↔ kg, ...)
+  components/           Catalog, ExperimentLayout, ParamPanel, ResultPanel, FormulaView, AiPanel, LiveChart
+  experiments/
+    ap-suat-chat-ran/   model.ts, model.test.ts, View.tsx, index.ts
+    phan-xa-anh-sang/
+    mach-dien-don-gian/
+    luc-va-chuyen-dong/ engine/ (chuyển từ src/physics), scenes/, View.tsx
+  ai/                   client.ts, schema.ts (Zod)
+tests/ai-cases/         bộ đề mẫu và đáp án mong đợi
+```
+
+Hợp đồng của một mẫu:
+
+```ts
+interface ExperimentTemplate<P> {
+  id: string;                 // 'ap-suat-chat-ran'
+  title: string;
+  group: string;              // Cơ học, Quang học, Điện học...
+  topic: string;
+  grade: 6 | 7 | 8 | 9 | null; // null cho đến khi đối chiếu SGK
+  params: { [K in keyof P]: ParamDef };   // nhãn, ký hiệu, đơn vị, min, max, bước, mặc định
+  outputs: OutputDef[];       // ký hiệu, đơn vị, nhãn
+  compute(p: P): Record<string, number>;  // hàm thuần, có kiểm thử
+  formulas: string[];         // LaTeX
+  conditions: string;         // điều kiện áp dụng, hiển thị cho giáo viên
+  aiHint: string;             // mô tả ngắn để AI nhận diện loại đề
+  View: React.FC<ViewProps<P>>;
+}
+```
+
+## Các mốc
+
+Cỡ việc: N = nhỏ, V = vừa, L = lớn.
+
+### M0 — Chuẩn bị (N)
+- [ ] `git init`, commit trạng thái hiện tại làm mốc.
+- [ ] Xác nhận ba quyết định còn chờ ở bảng trên.
+
+### M1 — Nền React + TypeScript (V)
+- [ ] Dựng Vite + React + TS, thêm Vitest, Zod, KaTeX, react-router.
+- [ ] Chuyển `src/physics/*` vào `experiments/luc-va-chuyen-dong/engine/`, giữ nguyên hành vi.
+- [ ] Chuyển `index.html` và `main.js` thành các thành phần React; giữ `style.css`.
+- [ ] Xóa tệp mẫu thừa của Vite (`counter.js`, `assets/*`).
+
+Hoàn thành khi: `npm run build` sạch, app chạy với đầy đủ tính năng như trước.
+
+### M2 — Sửa vật lý mô-đun cơ học (V)
+- [ ] Trọng trường: đổi sang `gravity.scale = g × (px/m) / 10⁶` (đo được hiện đang cho 40 m/s² khi ghi 9,8).
+- [ ] Lò xo theo lực đàn hồi thật (F = k·Δl, k tính bằng N/m) thay cho ràng buộc vị trí.
+- [ ] Thêm thế năng đàn hồi vào đồ thị năng lượng.
+- [ ] Bỏ bài mẫu THPT (ném xiên, con lắc dao động, bảo toàn động lượng).
+- [ ] Bài mẫu THCS: lò xo treo quả nặng, ma sát trên các bề mặt, đo tốc độ bằng cổng quang, đòn bẩy, chuyển hóa động năng – thế năng.
+- [ ] Đổi thuật ngữ: "vận tốc" → "tốc độ", bỏ nhãn véc-tơ.
+
+Hoàn thành khi kiểm thử qua:
+- Rơi tự do 1 s từ trạng thái nghỉ: quãng đường 5 m ± 2% (g = 10).
+- Lò xo: độ giãn tỉ lệ thuận với khối lượng treo, sai số < 2%.
+- Vật trượt không ma sát: cơ năng lệch < 2% sau 5 s.
+- Đòn bẩy cân bằng khi F₁·d₁ = F₂·d₂.
+
+### M3 — Khung mẫu thí nghiệm (V)
+- [ ] `core/types.ts`, `registry.ts`, `validate.ts`, `units.ts` kèm kiểm thử.
+- [ ] `ExperimentLayout`: vùng mô phỏng, bảng tham số, kết quả, công thức, điều kiện áp dụng.
+- [ ] `ParamPanel` sinh thanh trượt và ô nhập từ `params`.
+- [ ] Trang danh mục, lọc theo nhóm và lớp.
+- [ ] Đăng ký "Lực và chuyển động" làm mẫu đầu tiên.
+
+Hoàn thành khi: thêm một mẫu thử chỉ cần một thư mục và một dòng trong `registry.ts`.
+
+### M4 — Áp suất chất rắn (N)
+- [ ] `compute`: p = F/S; cho nhập F trực tiếp hoặc qua khối lượng (F = 10m).
+- [ ] Hình vẽ: vật đặt trên mặt bị ép, độ lún minh họa theo p, đổi diện tích tiếp xúc.
+- [ ] Kiểm thử: giá trị chuẩn, đổi đơn vị cm² → m², chặn S ≤ 0.
+
+### M5 — Phản xạ ánh sáng (V)
+- [ ] SVG: gương, tia tới, pháp tuyến, tia phản xạ, thước đo góc.
+- [ ] Kéo nguồn sáng để đổi góc tới; xoay gương.
+- [ ] Kiểm thử: i = i′ với góc đo từ pháp tuyến, các góc biên 0° và gần 90°.
+
+### M6 — Mạch điện đơn giản (L)
+- [ ] Bảng mạch dạng lưới; kéo thả pin, bóng đèn, công tắc; nối dây giữa các chốt.
+- [ ] Kiểm tra mạch kín bằng duyệt đồ thị; đèn sáng khi mạch kín và công tắc đóng.
+- [ ] Cảnh báo đoản mạch.
+- [ ] Kiểm thử: mạch hở, mạch kín, công tắc mở, đoản mạch, hai đèn nối tiếp và song song.
+
+Chưa làm ở mốc này: bộ giải mạch (tính I, U). Để đến M8 cùng ampe kế và vôn kế.
+
+### M7 — AI (L) — cần khóa API
+- [ ] `server/`: điểm cuối nhận văn bản, trả về JSON theo schema.
+- [ ] Lời nhắc hệ thống sinh tự động từ `registry` (id, mô tả, tham số, đơn vị, khoảng giá trị).
+- [ ] Kết quả trả về: `templateId`, `params`, `asks` (đại lượng cần tìm), `summary` (tóm tắt đề), hoặc `unsupported` kèm gợi ý.
+- [ ] Kiểm tra bằng Zod và `validate.ts`; sai thì gửi lỗi lại cho mô hình sửa một lần.
+- [ ] `AiPanel`: ô nhập, trạng thái đang tạo, thông báo lỗi, bảng "Dữ kiện đề bài".
+- [ ] Chỉnh tiếp bằng lời trên thí nghiệm đang mở.
+- [ ] Bộ 30 đề mẫu trong `tests/ai-cases/` và lệnh chạy đánh giá.
+
+Hoàn thành khi: trên bộ 30 đề, chọn đúng mẫu ≥ 90% và điền đúng toàn bộ tham số ≥ 80%; đề ngoài phạm vi được báo "chưa hỗ trợ".
+
+### M8 — Mở rộng danh mục mức "Cao" (L, mỗi bài N–V)
+- [ ] Đo lường (chiều dài, thể tích, khối lượng, thời gian; độ chia nhỏ nhất)
+- [ ] Khối lượng riêng (D = m/V, nổi và chìm)
+- [ ] Áp suất chất lỏng (p = d·h)
+- [ ] Lực đẩy Archimedes (F_A = d·V)
+- [ ] Đo dòng điện và hiệu điện thế (thêm bộ giải mạch, ampe kế, vôn kế)
+- [ ] Đo tốc độ (v = s/t) — bổ sung ngoài danh mục, dùng cổng quang có sẵn
+
+### M9 — Mở rộng mức "Trung bình" (L)
+- [ ] Công cơ học, công suất
+- [ ] Sự nở vì nhiệt, truyền nhiệt
+- [ ] Dao động và âm
+- [ ] Khúc xạ ánh sáng
+- [ ] Điện trở và định luật Ohm
+- [ ] Nam châm và từ trường
+
+### M10 — Luồng học tập (V)
+- [ ] Dự đoán → làm thí nghiệm → câu hỏi → phản hồi.
+- [ ] AI soạn nháp câu hỏi, giáo viên duyệt trước khi dùng.
+- [ ] Lưu và mở lại thí nghiệm; xuất số liệu CSV.
+
+### M11 — Dùng trên lớp và phát hành (V)
+- [ ] Hỗ trợ cảm ứng cho bảng tương tác.
+- [ ] Giao diện sáng, chữ lớn cho máy chiếu.
+- [ ] Chia sẻ thí nghiệm bằng đường dẫn.
+- [ ] Triển khai (nơi đặt máy chủ: chờ quyết định).
+
+## Việc song song, cần giáo viên hoặc người có chuyên môn
+
+- [ ] Đối chiếu 17 thí nghiệm với sách giáo khoa, điền cột `grade` cho từng mẫu.
+- [ ] Rà soát ký hiệu, đơn vị, điều kiện áp dụng của từng công thức.
+- [ ] Soạn 30 đề mẫu cho M7 (hoặc duyệt bộ đề do AI soạn nháp).
+- [ ] Bảng giấy phép cho mã nguồn, hình ảnh, nội dung trước khi phát hành.
+
+## Thứ tự và phụ thuộc
+
+```
+M0 → M1 → M2
+        ↘ M3 → M4 → M5 → M6 → M8 → M9
+                 ↘ M7 (bắt đầu được sau M4, cần khóa API) → M10 → M11
+```
+
+M7 nên bắt đầu ngay sau M4: có một mẫu thật là đủ để dựng và thử toàn bộ đường đi của AI, các mẫu sau tự động được AI nhận biết qua `registry`.
+
+## Rủi ro
+
+| Rủi ro | Cách xử lý |
+|---|---|
+| Trình soạn mạch điện (M6) là phần tốn công nhất | Chia hai bước: mạch kín trước, giải mạch sau |
+| Danh mục chưa đối chiếu sách giáo khoa | `grade` để trống cho đến khi có người duyệt; không ghi lớp phỏng đoán lên giao diện |
+| AI điền sai dữ kiện | Hiển thị bảng "Dữ kiện đề bài" để giáo viên thấy và sửa; đo bằng bộ 30 đề |
+| Chưa có khóa API | Phát triển M7 với bản giả lập, nối mô hình thật khi có khóa |
