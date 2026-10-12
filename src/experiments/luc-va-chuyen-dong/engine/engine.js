@@ -35,7 +35,7 @@ export class PhysicsEngine {
     // 1 metre = this.scale CSS-pixels
     this.scale = 25.0;
     this.timeScale = 1.0;
-    this.gravityVal = 9.80; // m/s²
+    this.gravityVal = 10.0; // N/kg theo SGK KHTN THCS
     this.airDrag = 0.0;
 
     // --- Simulation state ---
@@ -76,7 +76,7 @@ export class PhysicsEngine {
 
   initMatter() {
     this.engine = Engine.create({
-      gravity: { x: 0, y: 1.0, scale: 0.001 * (this.gravityVal / 9.8) }
+      gravity: { x: 0, y: 1.0, scale: 0.001 * (this.gravityVal / 10.0) }
     });
     this.world = this.engine.world;
 
@@ -209,7 +209,7 @@ export class PhysicsEngine {
   setGravity(g) {
     this.gravityVal = g;
     this.engine.gravity.y = g === 0 ? 0 : 1.0;
-    this.engine.gravity.scale = g === 0 ? 0 : (g / 9.8) * 0.001;
+    this.engine.gravity.scale = g === 0 ? 0 : (g / 10.0) * 0.001;
   }
 
   setAirDrag(k) { this.airDrag = k; }

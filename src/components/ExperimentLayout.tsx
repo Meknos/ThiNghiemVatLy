@@ -28,7 +28,7 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
 
   const [paramValues, setParamValues] = useState<Record<string, number>>(initialParams);
   const [contextPrompt, setContextPrompt] = useState('');
-  const [activeTab, setActiveTab] = useState<'params' | 'results'>('params');
+  const [activeTab, setActiveTab] = useState<'params' | 'results' | 'learning'>('params');
 
   // Compute outputs
   const validation = useMemo(() => {
@@ -139,13 +139,19 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
             className={`tab-btn ${activeTab === 'params' ? 'active' : ''}`}
             onClick={() => setActiveTab('params')}
           >
-            Thông Số & Đo Đạc
+            Thông Số
           </button>
           <button
             className={`tab-btn ${activeTab === 'results' ? 'active' : ''}`}
             onClick={() => setActiveTab('results')}
           >
-            Công Thức & Kết Quả
+            Công Thức
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'learning' ? 'active' : ''}`}
+            onClick={() => setActiveTab('learning')}
+          >
+            Câu Hỏi SGK
           </button>
         </div>
 
@@ -156,6 +162,38 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
               values={validation.cleanedParams}
               onChange={handleParamChange}
             />
+            {/* ACTIONS */}
+            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button
+                className="btn-export-csv"
+                onClick={() => {
+                  const headers = Object.keys(template.params).concat(template.outputs.map(o => o.symbol));
+                  const values = Object.values(validation.cleanedParams).concat(template.outputs.map(o => computedOutputs[o.symbol] ?? ''));
+                  const csv = `${headers.join(',')}\n${values.join(',')}`;
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `AIPLab_${template.id}_data.csv`;
+                  a.click();
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Xuất Dữ Liệu Thực Nghiệm (CSV)
+              </button>
+              <button
+                className="btn-share-link"
+                onClick={() => {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('exp', template.id);
+                  navigator.clipboard.writeText(url.toString());
+                  alert('Đã sao chép liên kết thí nghiệm vào Clipboard để chia sẻ bài giảng!');
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                Sao Chép Liên Kết Thí Nghiệm
+              </button>
+            </div>
           </div>
         )}
 
@@ -167,6 +205,28 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
               formulas={template.formulas}
               conditions={template.conditions}
             />
+          </div>
+        )}
+
+        {activeTab === 'learning' && (
+          <div className="tab-pane active">
+            <div className="learning-card">
+              <span className="learning-tag">1. Dự đoán (Predict)</span>
+              <p className="learning-q">Khi thay đổi đại lượng đầu vào, các đại lượng đầu ra sẽ biến đổi theo chiều hướng nào?</p>
+              <p className="learning-a">Hãy ghi nhận dự đoán của học sinh trước khi kéo thanh trượt mô phỏng.</p>
+            </div>
+
+            <div className="learning-card">
+              <span className="learning-tag">2. Quan sát (Observe)</span>
+              <p className="learning-q">Hiện tượng vật lý nào xuất hiện trực tiếp trên màn hình thí nghiệm ảo?</p>
+              <p className="learning-a">Quan sát sự thay đổi tỉ lệ thuận / nghịch và kiểm chứng số liệu đo đạc.</p>
+            </div>
+
+            <div className="learning-card">
+              <span className="learning-tag">3. Kết luận (Explain)</span>
+              <p className="learning-q">Quy tắc và định luật vật lý rút ra từ thí nghiệm là gì?</p>
+              <p className="learning-a">Áp dụng công thức SGK để giải thích chính xác bản chất hiện tượng.</p>
+            </div>
           </div>
         )}
       </aside>

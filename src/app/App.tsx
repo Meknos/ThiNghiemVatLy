@@ -1,11 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { EXPERIMENT_REGISTRY, getExperimentById } from '../core/registry';
 import { ExperimentLayout } from '../components/ExperimentLayout';
 import { dispatchContextToTemplate } from '../ai/dispatcher';
 
 export const App: React.FC = () => {
-  const [currentId, setCurrentId] = useState<string>('ap-suat-chat-ran');
+  // Sync with URL query param if present
+  const [currentId, setCurrentId] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const expParam = params.get('exp');
+    if (expParam && getExperimentById(expParam)) return expParam;
+    return 'ap-suat-chat-ran';
+  });
+
+  const [projectorMode, setProjectorMode] = useState<boolean>(false);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    document.body.classList.toggle('projector-mode', projectorMode);
+  }, [projectorMode]);
 
   const currentTemplate = getExperimentById(currentId) || EXPERIMENT_REGISTRY[0];
 
@@ -48,6 +60,14 @@ export const App: React.FC = () => {
         </div>
 
         <div className="header-right">
+          <button
+            className={`ctrl-btn ${projectorMode ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+            onClick={() => setProjectorMode(!projectorMode)}
+            title="Chuyển đổi giao diện sáng cho máy chiếu lớp học"
+          >
+            {projectorMode ? '☀️ Máy Chiếu (Bật)' : '🌙 Phòng Lab (Tối)'}
+          </button>
           <div className="env-badge" title="Chủ đề thí nghiệm hiện tại">
             <span className="badge-dot" />
             <span>{currentTemplate.group} (Lớp {currentTemplate.grade ?? '6-9'})</span>

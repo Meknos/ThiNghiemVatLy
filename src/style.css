@@ -1198,9 +1198,92 @@ input:checked + .slider-toggle:before {
   animation: slideDown 0.3s ease-out;
 }
 
-@keyframes slideDown {
-  from { transform: translateY(-100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+/* PROJECTOR & HIGH CONTRAST MODE */
+body.projector-mode {
+  --bg-deep: #ffffff;
+  --bg-surface: #f1f5f9;
+  --bg-card: #f8fafc;
+  --bg-card-hover: #e2e8f0;
+  --bg-input: #ffffff;
+  --border-subtle: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  font-size: 17px;
 }
+
+body.projector-mode .canvas-main-area {
+  background: #f8fafc;
+}
+
+body.projector-mode .experiment-stage-card {
+  background: #ffffff;
+}
+
+body.projector-mode .svg-canvas-wrapper {
+  background: #f8fafc;
+  border: 2px solid #cbd5e1;
+}
+
+/* LEARNING FLOW QA STYLES */
+.learning-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.learning-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--cyan-400);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.learning-q {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.learning-a {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--cyan-400);
+}
+
+.btn-export-csv, .btn-share-link {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  margin-top: 8px;
+}
+
+.btn-export-csv:hover, .btn-share-link:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--cyan-400);
+}
+
 
 

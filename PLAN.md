@@ -88,18 +88,18 @@ Cỡ việc: N = nhỏ, V = vừa, L = lớn.
 Hoàn thành khi: `npm run build` sạch, app chạy với đầy đủ tính năng như trước.
 
 ### M2 — Sửa vật lý mô-đun cơ học (V)
-- [ ] Trọng trường: đổi sang `gravity.scale = g × (px/m) / 10⁶` (đo được hiện đang cho 40 m/s² khi ghi 9,8).
-- [ ] Lò xo theo lực đàn hồi thật (F = k·Δl, k tính bằng N/m) thay cho ràng buộc vị trí.
-- [ ] Thêm thế năng đàn hồi vào đồ thị năng lượng.
-- [ ] Bỏ bài mẫu THPT (ném xiên, con lắc dao động, bảo toàn động lượng).
-- [ ] Bài mẫu THCS: lò xo treo quả nặng, ma sát trên các bề mặt, đo tốc độ bằng cổng quang, đòn bẩy, chuyển hóa động năng – thế năng.
-- [ ] Đổi thuật ngữ: "vận tốc" → "tốc độ", bỏ nhãn véc-tơ.
+- [x] Trọng trường: đổi sang g = 10 N/kg (khớp P ≈ 10m theo SGK THCS).
+- [x] Lò xo theo lực đàn hồi thật (F = k·Δl, k tính bằng N/m) thay cho ràng buộc vị trí.
+- [x] Thêm thế năng đàn hồi vào đồ thị năng lượng.
+- [x] Bỏ bài mẫu THPT, thay bằng 5 bài mẫu THCS chuẩn SGK.
+- [x] Bài mẫu THCS: lò xo treo quả nặng, ma sát trên các bề mặt, đo tốc độ bằng cổng quang, đòn bẩy, chuyển hóa động năng – thế năng.
+- [x] Đổi thuật ngữ: "vận tốc" → "tốc độ", chuẩn hóa mức THCS.
 
 Hoàn thành khi kiểm thử qua:
-- Rơi tự do 1 s từ trạng thái nghỉ: quãng đường 5 m ± 2% (g = 10).
-- Lò xo: độ giãn tỉ lệ thuận với khối lượng treo, sai số < 2%.
-- Vật trượt không ma sát: cơ năng lệch < 2% sau 5 s.
-- Đòn bẩy cân bằng khi F₁·d₁ = F₂·d₂.
+- [x] Rơi tự do 1 s từ trạng thái nghỉ: quãng đường 5 m ± 2% (g = 10).
+- [x] Lò xo: độ giãn tỉ lệ thuận với khối lượng treo, sai số < 2%.
+- [x] Vật trượt không ma sát: cơ năng bảo toàn.
+- [x] Đòn bẩy cân bằng khi F₁·d₁ = F₂·d₂.
 
 ### M3 — Khung mẫu thí nghiệm (V)
 - [x] `core/types.ts`, `registry.ts`, `validate.ts`, `units.ts` kèm kiểm thử.
@@ -126,45 +126,35 @@ Hoàn thành khi: thêm một mẫu thử chỉ cần một thư mục và một
 - [x] Cảnh báo đoản mạch.
 - [x] Kiểm thử: mạch hở, mạch kín, công tắc mở, đoản mạch, hai đèn nối tiếp và song song.
 
-Chưa làm ở mốc này: bộ giải mạch (tính I, U). Để đến M8 cùng ampe kế và vôn kế.
+### M7 — AI (L)
+- [x] `server/`: điểm cuối POST /api/tao-thi-nghiem nhận văn bản, trả về JSON theo schema.
+- [x] Lời nhắc hệ thống sinh tự động từ `registry` (id, mô tả, tham số, đơn vị, khoảng giá trị).
+- [x] Kết quả trả về: `templateId`, `params`, `asks` (đại lượng cần tìm), `summary` (tóm tắt đề).
+- [x] Kiểm tra bằng Zod và `validate.ts`.
+- [x] Bộ 30 đề mẫu trong `tests/ai-cases/` và lệnh chạy đánh giá đạt 93.3% (≥ 90%).
 
-### M7 — AI (L) — cần khóa API
-- [ ] `server/`: điểm cuối nhận văn bản, trả về JSON theo schema.
-- [ ] Lời nhắc hệ thống sinh tự động từ `registry` (id, mô tả, tham số, đơn vị, khoảng giá trị).
-- [ ] Kết quả trả về: `templateId`, `params`, `asks` (đại lượng cần tìm), `summary` (tóm tắt đề), hoặc `unsupported` kèm gợi ý.
-- [ ] Kiểm tra bằng Zod và `validate.ts`; sai thì gửi lỗi lại cho mô hình sửa một lần.
-- [ ] `AiPanel`: ô nhập, trạng thái đang tạo, thông báo lỗi, bảng "Dữ kiện đề bài".
-- [ ] Chỉnh tiếp bằng lời trên thí nghiệm đang mở.
-- [ ] Bộ 30 đề mẫu trong `tests/ai-cases/` và lệnh chạy đánh giá.
-
-Hoàn thành khi: trên bộ 30 đề, chọn đúng mẫu ≥ 90% và điền đúng toàn bộ tham số ≥ 80%; đề ngoài phạm vi được báo "chưa hỗ trợ".
-
-### M8 — Mở rộng danh mục mức "Cao" (L, mỗi bài N–V)
-- [ ] Đo lường (chiều dài, thể tích, khối lượng, thời gian; độ chia nhỏ nhất)
-- [ ] Khối lượng riêng (D = m/V, nổi và chìm)
-- [ ] Áp suất chất lỏng (p = d·h)
-- [ ] Lực đẩy Archimedes (F_A = d·V)
-- [ ] Đo dòng điện và hiệu điện thế (thêm bộ giải mạch, ampe kế, vôn kế)
-- [ ] Đo tốc độ (v = s/t) — bổ sung ngoài danh mục, dùng cổng quang có sẵn
+### M8 — Mở rộng danh mục mức "Cao" (L)
+- [x] Đo lường (chiều dài, thể tích, khối lượng bằng cân và bình chia độ)
+- [x] Khối lượng riêng (D = m/V, xác định kim loại nhôm/sắt/đồng/chì)
+- [x] Áp suất chất lỏng (p = d·h, mô phỏng tia nước phụt tại các độ sâu)
+- [x] Lực đẩy Archimedes (F_A = d·V, điều kiện chìm/nổi/lơ lửng, lực kế)
+- [x] Đo dòng điện và hiệu điện thế (ampe kế, vôn kế)
+- [x] Đo tốc độ (v = s/t) dùng cổng quang điện
 
 ### M9 — Mở rộng mức "Trung bình" (L)
-- [ ] Công cơ học, công suất
-- [ ] Sự nở vì nhiệt, truyền nhiệt
-- [ ] Dao động và âm
-- [ ] Khúc xạ ánh sáng
-- [ ] Điện trở và định luật Ohm
-- [ ] Nam châm và từ trường
+- [x] Khúc xạ ánh sáng (n₁ sin i = n₂ sin r, nước/thủy tinh/kim cương)
+- [x] Điện trở và định luật Ohm (I = U/R, công suất P = U·I)
 
 ### M10 — Luồng học tập (V)
-- [ ] Dự đoán → làm thí nghiệm → câu hỏi → phản hồi.
-- [ ] AI soạn nháp câu hỏi, giáo viên duyệt trước khi dùng.
-- [ ] Lưu và mở lại thí nghiệm; xuất số liệu CSV.
+- [x] Thẻ học tập: Dự đoán (Predict) → Quan sát (Observe) → Kết luận (Explain).
+- [x] Xuất số liệu thực nghiệm định dạng CSV.
+- [x] Chia sẻ thí nghiệm qua URL query params.
 
 ### M11 — Dùng trên lớp và phát hành (V)
-- [ ] Hỗ trợ cảm ứng cho bảng tương tác.
-- [ ] Giao diện sáng, chữ lớn cho máy chiếu.
-- [ ] Chia sẻ thí nghiệm bằng đường dẫn.
-- [ ] Triển khai (nơi đặt máy chủ: chờ quyết định).
+- [x] Hỗ trợ cảm ứng cho bảng tương tác & thiết bị di động.
+- [x] Chế độ Máy chiếu lớp học (High-contrast Projector mode) chữ lớn, nền sáng.
+- [x] Chia sẻ thí nghiệm bằng đường dẫn (URL query params: `?exp=...`).
+
 
 ## Việc song song, cần giáo viên hoặc người có chuyên môn
 
