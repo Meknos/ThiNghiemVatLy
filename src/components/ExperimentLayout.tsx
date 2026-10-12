@@ -11,6 +11,15 @@ interface ExperimentLayoutProps {
   onGenerateFromContext: (prompt: string) => void;
 }
 
+const SAMPLE_PROMPTS = [
+  { label: '🧱 Áp suất gạch 2kg (10cm²)', prompt: 'Khối sắt m = 2kg đặt trên đệm xốp với diện tích tiếp xúc 10cm2' },
+  { label: '🌊 Vật nổi 500cm³ trong nước', prompt: 'Nhúng một vật có thể tích 500cm3 vào trong nước, tính lực đẩy Ác-si-mét' },
+  { label: '🔦 Phản xạ góc 45°', prompt: 'Chiếu tia sáng tới gương phẳng với góc tới i = 45 độ, tính góc phản xạ' },
+  { label: '💡 Mạch 2 đèn song song', prompt: 'Mắc 2 bóng đèn song song vào nguồn điện 12V' },
+  { label: '⚡ Khảo sát định luật Ôm', prompt: 'Đoạn mạch có hiệu điện thế U = 12V và điện trở R = 6 ôm theo định luật Ôm' },
+  { label: '⚖️ Đòn bẩy cân bằng', prompt: 'Khảo sát điều kiện cân bằng của đòn bẩy quanh điểm tựa' }
+];
+
 export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
   template,
   onSelectExperiment,
@@ -29,6 +38,10 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
   const [paramValues, setParamValues] = useState<Record<string, number>>(initialParams);
   const [contextPrompt, setContextPrompt] = useState('');
   const [activeTab, setActiveTab] = useState<'params' | 'results' | 'learning'>('params');
+
+  // Filter state for catalog
+  const [gradeFilter, setGradeFilter] = useState<number | null>(null);
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
 
   // Compute outputs
   const validation = useMemo(() => {
@@ -50,6 +63,14 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
     }));
   };
 
+  const filteredTemplates = useMemo(() => {
+    return allTemplates.filter((t) => {
+      if (gradeFilter !== null && t.grade !== gradeFilter) return false;
+      if (groupFilter !== null && t.group !== groupFilter) return false;
+      return true;
+    });
+  }, [allTemplates, gradeFilter, groupFilter]);
+
   const ViewComponent = template.View;
 
   return (
@@ -57,11 +78,11 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
       {/* LEFT SIDEBAR: AI NGỮ CẢNH & DANH MỤC THÍ NGHIỆM */}
       <aside className="sidebar sidebar-left">
         {/* AI CONTEXT INPUT */}
-        <section className="sidebar-section">
+        <section className="sidebar-section ai-section-card">
           <div className="section-header">
             <div className="section-title">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              Nhập Ngữ Cảnh Hoặc Đề Bài
+              AI Trích Xuất & Tạo Thí Nghiệm
             </div>
             <span className="tag-ai">AI ENGINE</span>
           </div>
@@ -72,8 +93,29 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
               rows={3}
               value={contextPrompt}
               onChange={(e) => setContextPrompt(e.target.value)}
-              placeholder="Nhập đề bài hoặc mô tả (ví dụ: Áp suất một viên gạch m=2kg đặt mặt 10cm2, hoặc Chiếu tia sáng với góc tới 45 độ, hoặc Mạch điện 2 đèn song song...)"
+              placeholder="Nhập đề bài hoặc hiện tượng SGK (ví dụ: 'Khối sắt 2kg đặt mặt 10cm2', 'Chiếu tia sáng góc 30 độ', 'Mạch 2 đèn song song')..."
             />
+
+            {/* Quick Sample Prompts */}
+            <div className="sample-prompts-row">
+              <span className="sample-hint">Gợi ý nhanh:</span>
+              <div className="sample-chips">
+                {SAMPLE_PROMPTS.map((sp, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="sample-chip"
+                    onClick={() => {
+                      setContextPrompt(sp.prompt);
+                      onGenerateFromContext(sp.prompt);
+                    }}
+                  >
+                    {sp.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="context-action-row">
               <button
                 className="btn-generate"
@@ -82,23 +124,57 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
                 }}
               >
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                Tạo Thí Nghiệm Tự Động
+                Tạo Thí Nghiệm Ngay
               </button>
             </div>
           </div>
         </section>
 
         {/* DANH MỤC THÍ NGHIỆM KHTN THCS */}
-        <section className="sidebar-section scrollable-section">
+        <section className="sidebar-section scrollable-section catalog-section">
           <div className="section-header">
             <div className="section-title">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-              Thư Viện Thí Nghiệm (THCS)
+              Thư Viện Thí Nghiệm ({filteredTemplates.length})
+            </div>
+          </div>
+
+          {/* Grade Filter Pills */}
+          <div className="catalog-filters">
+            <div className="filter-group">
+              <button
+                className={`filter-pill ${gradeFilter === null ? 'active' : ''}`}
+                onClick={() => setGradeFilter(null)}
+              >
+                Tất cả
+              </button>
+              {[6, 7, 8, 9].map((g) => (
+                <button
+                  key={g}
+                  className={`filter-pill ${gradeFilter === g ? 'active' : ''}`}
+                  onClick={() => setGradeFilter(gradeFilter === g ? null : g)}
+                >
+                  Lớp {g}
+                </button>
+              ))}
+            </div>
+
+            {/* Group Filter */}
+            <div className="filter-group group-pills">
+              {['Cơ học', 'Quang học', 'Điện học', 'Mở đầu & Đo lường'].map((grp) => (
+                <button
+                  key={grp}
+                  className={`filter-pill-small ${groupFilter === grp ? 'active' : ''}`}
+                  onClick={() => setGroupFilter(groupFilter === grp ? null : grp)}
+                >
+                  {grp}
+                </button>
+              ))}
             </div>
           </div>
 
           <div className="preset-list">
-            {allTemplates.map((t) => (
+            {filteredTemplates.map((t) => (
               <div
                 key={t.id}
                 className={`preset-item ${t.id === template.id ? 'active' : ''}`}
@@ -114,7 +190,10 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
               >
                 <div className="preset-title">
                   <span>{t.title}</span>
-                  <span className="preset-category-tag">{t.group}</span>
+                  <div className="preset-badge-group">
+                    {t.grade && <span className="grade-badge">Lớp {t.grade}</span>}
+                    <span className="preset-category-tag">{t.group}</span>
+                  </div>
                 </div>
                 <div className="preset-desc">{t.aiHint}</div>
               </div>
@@ -162,8 +241,9 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
               values={validation.cleanedParams}
               onChange={handleParamChange}
             />
-            {/* ACTIONS */}
-            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+
+            {/* ACTION BUTTONS (CSV EXPORT & SHARE) */}
+            <div className="sidebar-actions-panel">
               <button
                 className="btn-export-csv"
                 onClick={() => {
@@ -209,23 +289,32 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
         )}
 
         {activeTab === 'learning' && (
-          <div className="tab-pane active">
+          <div className="tab-pane active learning-pane">
             <div className="learning-card">
-              <span className="learning-tag">1. Dự đoán (Predict)</span>
+              <div className="learning-card-header">
+                <span className="learning-badge predict">BƯỚC 1</span>
+                <span className="learning-title">Dự Đoán (Predict)</span>
+              </div>
               <p className="learning-q">Khi thay đổi đại lượng đầu vào, các đại lượng đầu ra sẽ biến đổi theo chiều hướng nào?</p>
-              <p className="learning-a">Hãy ghi nhận dự đoán của học sinh trước khi kéo thanh trượt mô phỏng.</p>
+              <p className="learning-a">💡 Hãy ghi nhận dự đoán của học sinh vào phiếu học tập trước khi kéo thanh trượt mô phỏng.</p>
             </div>
 
             <div className="learning-card">
-              <span className="learning-tag">2. Quan sát (Observe)</span>
+              <div className="learning-card-header">
+                <span className="learning-badge observe">BƯỚC 2</span>
+                <span className="learning-title">Quan Sát (Observe)</span>
+              </div>
               <p className="learning-q">Hiện tượng vật lý nào xuất hiện trực tiếp trên màn hình thí nghiệm ảo?</p>
-              <p className="learning-a">Quan sát sự thay đổi tỉ lệ thuận / nghịch và kiểm chứng số liệu đo đạc.</p>
+              <p className="learning-a">🔍 Quan sát sự thay đổi tỉ lệ thuận / nghịch và kiểm chứng số liệu đo đạc hiển thị ở bảng kết quả.</p>
             </div>
 
             <div className="learning-card">
-              <span className="learning-tag">3. Kết luận (Explain)</span>
+              <div className="learning-card-header">
+                <span className="learning-badge explain">BƯỚC 3</span>
+                <span className="learning-title">Kết Luận (Explain)</span>
+              </div>
               <p className="learning-q">Quy tắc và định luật vật lý rút ra từ thí nghiệm là gì?</p>
-              <p className="learning-a">Áp dụng công thức SGK để giải thích chính xác bản chất hiện tượng.</p>
+              <p className="learning-a">🎯 Áp dụng công thức SGK tại tab "Công Thức" để giải thích chính xác bản chất hiện tượng.</p>
             </div>
           </div>
         )}

@@ -41,36 +41,47 @@ export const App: React.FC = () => {
             </svg>
           </div>
           <div className="app-title-group">
-            <h1 className="app-title">AIPLab Studio (THCS)</h1>
-            <p className="app-subtitle">Mô Phỏng Thí Nghiệm & Bám Sát SGK Khoa Học Tự Nhiên</p>
+            <div className="app-title-row">
+              <h1 className="app-title">AIPLab Studio</h1>
+              <span className="app-version-badge">KHTN THCS</span>
+            </div>
+            <p className="app-subtitle">Phòng Thí Nghiệm Vật Lý Tương Tác Trực Quan</p>
           </div>
         </div>
 
-        {/* QUICK EXPERIMENT SELECTOR TABS IN HEADER */}
-        <div className="playback-controls">
-          {EXPERIMENT_REGISTRY.map((t) => (
-            <button
-              key={t.id}
-              className={`ctrl-btn ${t.id === currentId ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setCurrentId(t.id)}
-            >
-              <span>{t.title.split('&')[0].trim()}</span>
-            </button>
-          ))}
+        {/* ELEGANT QUICK EXPERIMENT SELECTOR DROPDOWN */}
+        <div className="header-center-selector">
+          <div className="selector-label">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span>Thí nghiệm đang mở:</span>
+          </div>
+          <select
+            className="header-dropdown-select"
+            value={currentId}
+            onChange={(e) => setCurrentId(e.target.value)}
+          >
+            {EXPERIMENT_REGISTRY.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.grade ? `[Lớp ${t.grade}] ` : ''}{t.title} ({t.group})
+              </option>
+            ))}
+          </select>
         </div>
 
+        {/* HEADER CONTROLS (PROJECTOR, GRADE BADGE, HELP) */}
         <div className="header-right">
           <button
-            className={`ctrl-btn ${projectorMode ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+            className={`ctrl-btn ${projectorMode ? 'btn-projector-active' : 'btn-secondary'}`}
             onClick={() => setProjectorMode(!projectorMode)}
             title="Chuyển đổi giao diện sáng cho máy chiếu lớp học"
           >
-            {projectorMode ? '☀️ Máy Chiếu (Bật)' : '🌙 Phòng Lab (Tối)'}
+            <span className="icon-indicator">{projectorMode ? '☀️' : '🌙'}</span>
+            <span>{projectorMode ? 'Chế độ Máy Chiếu' : 'Chế độ Phòng Lab'}</span>
           </button>
-          <div className="env-badge" title="Chủ đề thí nghiệm hiện tại">
+
+          <div className="env-badge" title="Chủ đề và khối lớp">
             <span className="badge-dot" />
-            <span>{currentTemplate.group} (Lớp {currentTemplate.grade ?? '6-9'})</span>
+            <span>{currentTemplate.group} {currentTemplate.grade ? `(Lớp ${currentTemplate.grade})` : ''}</span>
           </div>
         </div>
       </header>
@@ -80,10 +91,11 @@ export const App: React.FC = () => {
         <div className="ai-notice-banner">
           <span className="ai-icon">✨</span>
           <span>{aiNotice}</span>
+          <button className="btn-close-notice" onClick={() => setAiNotice(null)}>✕</button>
         </div>
       )}
 
-      {/* MAIN LAYOUT */}
+      {/* MAIN WORKSPACE LAYOUT */}
       <ExperimentLayout
         template={currentTemplate}
         onSelectExperiment={(id) => setCurrentId(id)}
