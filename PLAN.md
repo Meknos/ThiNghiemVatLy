@@ -76,14 +76,14 @@ interface ExperimentTemplate<P> {
 Cỡ việc: N = nhỏ, V = vừa, L = lớn.
 
 ### M0 — Chuẩn bị (N)
-- [ ] `git init`, commit trạng thái hiện tại làm mốc.
-- [ ] Xác nhận ba quyết định còn chờ ở bảng trên.
+- [x] `git init`, commit trạng thái hiện tại làm mốc.
+- [x] Xác nhận ba quyết định còn chờ ở bảng trên.
 
 ### M1 — Nền React + TypeScript (V)
-- [ ] Dựng Vite + React + TS, thêm Vitest, Zod, KaTeX, react-router.
-- [ ] Chuyển `src/physics/*` vào `experiments/luc-va-chuyen-dong/engine/`, giữ nguyên hành vi.
-- [ ] Chuyển `index.html` và `main.js` thành các thành phần React; giữ `style.css`.
-- [ ] Xóa tệp mẫu thừa của Vite (`counter.js`, `assets/*`).
+- [x] Dựng Vite + React + TS, thêm Vitest, Zod, KaTeX, react-router.
+- [x] Chuyển `src/physics/*` vào `experiments/luc-va-chuyen-dong/engine/`, giữ nguyên hành vi.
+- [x] Chuyển `index.html` và `main.js` thành các thành phần React; giữ `style.css`.
+- [x] Xóa tệp mẫu thừa của Vite (`counter.js`, `assets/*`).
 
 Hoàn thành khi: `npm run build` sạch, app chạy với đầy đủ tính năng như trước.
 
@@ -102,29 +102,29 @@ Hoàn thành khi kiểm thử qua:
 - Đòn bẩy cân bằng khi F₁·d₁ = F₂·d₂.
 
 ### M3 — Khung mẫu thí nghiệm (V)
-- [ ] `core/types.ts`, `registry.ts`, `validate.ts`, `units.ts` kèm kiểm thử.
-- [ ] `ExperimentLayout`: vùng mô phỏng, bảng tham số, kết quả, công thức, điều kiện áp dụng.
-- [ ] `ParamPanel` sinh thanh trượt và ô nhập từ `params`.
-- [ ] Trang danh mục, lọc theo nhóm và lớp.
-- [ ] Đăng ký "Lực và chuyển động" làm mẫu đầu tiên.
+- [x] `core/types.ts`, `registry.ts`, `validate.ts`, `units.ts` kèm kiểm thử.
+- [x] `ExperimentLayout`: vùng mô phỏng, bảng tham số, kết quả, công thức, điều kiện áp dụng.
+- [x] `ParamPanel` sinh thanh trượt và ô nhập từ `params`.
+- [x] Trang danh mục, lọc theo nhóm và lớp.
+- [x] Đăng ký "Lực và chuyển động" làm mẫu đầu tiên.
 
 Hoàn thành khi: thêm một mẫu thử chỉ cần một thư mục và một dòng trong `registry.ts`.
 
 ### M4 — Áp suất chất rắn (N)
-- [ ] `compute`: p = F/S; cho nhập F trực tiếp hoặc qua khối lượng (F = 10m).
-- [ ] Hình vẽ: vật đặt trên mặt bị ép, độ lún minh họa theo p, đổi diện tích tiếp xúc.
-- [ ] Kiểm thử: giá trị chuẩn, đổi đơn vị cm² → m², chặn S ≤ 0.
+- [x] `compute`: p = F/S; cho nhập F trực tiếp hoặc qua khối lượng (F = 10m).
+- [x] Hình vẽ: vật đặt trên mặt bị ép, độ lún minh họa theo p, đổi diện tích tiếp xúc.
+- [x] Kiểm thử: giá trị chuẩn, đổi đơn vị cm² → m², chặn S ≤ 0.
 
 ### M5 — Phản xạ ánh sáng (V)
-- [ ] SVG: gương, tia tới, pháp tuyến, tia phản xạ, thước đo góc.
-- [ ] Kéo nguồn sáng để đổi góc tới; xoay gương.
-- [ ] Kiểm thử: i = i′ với góc đo từ pháp tuyến, các góc biên 0° và gần 90°.
+- [x] SVG: gương, tia tới, pháp tuyến, tia phản xạ, thước đo góc.
+- [x] Kéo nguồn sáng để đổi góc tới; xoay gương.
+- [x] Kiểm thử: i = i′ với góc đo từ pháp tuyến, các góc biên 0° và gần 90°.
 
 ### M6 — Mạch điện đơn giản (L)
-- [ ] Bảng mạch dạng lưới; kéo thả pin, bóng đèn, công tắc; nối dây giữa các chốt.
-- [ ] Kiểm tra mạch kín bằng duyệt đồ thị; đèn sáng khi mạch kín và công tắc đóng.
-- [ ] Cảnh báo đoản mạch.
-- [ ] Kiểm thử: mạch hở, mạch kín, công tắc mở, đoản mạch, hai đèn nối tiếp và song song.
+- [x] Bảng mạch dạng lưới; kéo thả pin, bóng đèn, công tắc; nối dây giữa các chốt.
+- [x] Kiểm tra mạch kín bằng duyệt đồ thị; đèn sáng khi mạch kín và công tắc đóng.
+- [x] Cảnh báo đoản mạch.
+- [x] Kiểm thử: mạch hở, mạch kín, công tắc mở, đoản mạch, hai đèn nối tiếp và song song.
 
 Chưa làm ở mốc này: bộ giải mạch (tính I, U). Để đến M8 cùng ampe kế và vôn kế.
 
