@@ -1,6 +1,10 @@
 import React from 'react';
 import { ParamDef } from '../core/types';
 
+// Số viết kiểu Việt Nam: 2.000.000 và 1,5
+const VI_NUMBER = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 });
+const formatVi = (x: number) => VI_NUMBER.format(x);
+
 interface ParamPanelProps {
   paramsDef: Record<string, ParamDef>;
   values: Record<string, number>;
@@ -30,7 +34,7 @@ export const ParamPanel: React.FC<ParamPanelProps> = ({ paramsDef, values, onCha
                   <span className="param-title">{def.label}</span>
                 </span>
                 <span className="val-display-pill">
-                  {currentVal} <span className="val-unit">{def.unit}</span>
+                  {formatVi(currentVal)} <span className="val-unit">{def.unit}</span>
                 </span>
               </div>
 
@@ -68,8 +72,8 @@ export const ParamPanel: React.FC<ParamPanelProps> = ({ paramsDef, values, onCha
               </div>
 
               <div className="slider-limits">
-                <span>{def.min} {def.unit}</span>
-                <span>{def.max} {def.unit}</span>
+                <span>{formatVi(def.min)} {def.unit}</span>
+                <span>{formatVi(def.max)} {def.unit}</span>
               </div>
             </div>
           );

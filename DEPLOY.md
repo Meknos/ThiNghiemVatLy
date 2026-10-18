@@ -33,7 +33,7 @@ Mở <http://localhost:8788>: đây là trang chạy giống hệt trên Cloudfl
 
 ## Đưa lên Cloudflare
 
-1. Đưa trang lên lần đầu (lệnh sẽ hỏi tạo dự án `aiplab-studio`, chọn nhánh sản phẩm là `master`):
+1. Đưa trang lên lần đầu (lệnh sẽ hỏi tạo dự án `aiplab-studio`, chọn nhánh sản phẩm là `main`):
 
    ```bash
    npm run cf:deploy

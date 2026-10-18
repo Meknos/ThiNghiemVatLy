@@ -574,6 +574,133 @@ const MixingScene: React.FC<SceneProps> = ({ values }) => {
 };
 
 /* ------------------------------------------------------------------
+   Áp suất, chất lỏng
+   Số liệu trải từ rất nhỏ đến rất lớn (0,1 cm² đến 10 m², vài Pa đến hàng triệu Pa)
+   nên kích thước trên hình theo thang logarit.
+------------------------------------------------------------------ */
+
+const logScale = (x: number, lo: number, hi: number, outLo: number, outHi: number) => {
+  const v = Math.log10(clamp(x, lo, hi));
+  return outLo + ((v - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo))) * (outHi - outLo);
+};
+
+/** Chất lỏng theo trọng lượng riêng: dầu, nước, nước biển, thủy ngân. */
+function liquidLook(d: number): { name: string; fill: string } {
+  if (d >= 100000) return { name: 'thủy ngân', fill: 'rgba(148,163,184,0.55)' };
+  if (d < 9500) return { name: 'dầu', fill: 'rgba(250,204,21,0.3)' };
+  if (d > 10150) return { name: 'nước biển', fill: 'rgba(14,116,144,0.5)' };
+  return { name: 'nước', fill: 'rgba(14,165,233,0.35)' };
+}
+
+/** Vật đè lên mặt đất: mặt tiếp xúc rộng theo S, mặt đất lún theo áp suất p. */
+const PressureScene: React.FC<SceneProps> = ({ values }) => {
+  const { p, F, S } = values;
+  const t = useAnimationTime();
+  const ease = Math.min(1, (t % 4) / 1.5); // vật hạ xuống rồi giữ yên, lặp lại
+  const w = logScale(S, 0.1, 100000, 24, 230);
+  const sink = logScale(p, 10, 10000000, 3, 30) * ease;
+  const cx = 200, ground = 100;
+  const top = ground + sink - 44;
+  const arrows = Math.max(2, Math.round(w / 26));
+
+  return (
+    <svg viewBox="0 0 560 150" className="formula-scene">
+      <defs><Arrow id="pressArrow" color={C.force} /></defs>
+      {/* Mặt đất bị lún dưới vật */}
+      <path
+        d={`M 20 ${ground} L ${cx - w / 2 - 14} ${ground} Q ${cx - w / 2} ${ground} ${cx - w / 2} ${ground + sink} L ${cx + w / 2} ${ground + sink} Q ${cx + w / 2} ${ground} ${cx + w / 2 + 14} ${ground} L 380 ${ground} L 380 146 L 20 146 Z`}
+        fill="rgba(180,83,9,0.45)"
+        stroke="#d97706"
+        strokeWidth="2"
+      />
+      <rect x={cx - w / 2} y={top} width={w} height="44" rx="4" fill="#475569" stroke="#cbd5e1" strokeWidth="1.5" />
+      <text x={cx} y={top + 27} fill="#f8fafc" fontSize="12" fontWeight="bold" textAnchor="middle">{w > 70 ? `F = ${fmt(F)} N` : 'F'}</text>
+      {/* Áp lực phân bố trên cả mặt tiếp xúc */}
+      {Array.from({ length: arrows }, (_, k) => {
+        const x = cx - w / 2 + ((k + 0.5) * w) / arrows;
+        return <line key={k} x1={x} y1={top - 22} x2={x} y2={top - 3} stroke={C.force} strokeWidth="2.2" markerEnd="url(#pressArrow)" />;
+      })}
+      <line x1={cx - w / 2} y1={ground + sink + 10} x2={cx + w / 2} y2={ground + sink + 10} stroke={C.warn} strokeWidth="1.5" />
+      <text x={cx} y={ground + sink + 24} fill={C.warn} fontSize="12" fontWeight="bold" textAnchor="middle">S = {fmt(S)} cm²</text>
+      <text x="400" y="44" fill={C.ok} fontSize="15" fontWeight="bold">p = {fmt(p)} Pa</text>
+      <text x="400" y="68" fill={C.text} fontSize="12">Áp lực F = {fmt(F)} N</text>
+      <text x="400" y="88" fill={C.text} fontSize="12">Diện tích bị ép S = {fmt(S / 10000)} m²</text>
+      <text x="400" y="112" fill={C.dim} fontSize="11">Mặt tiếp xúc càng nhỏ,</text>
+      <text x="400" y="126" fill={C.dim} fontSize="11">vật lún càng sâu</text>
+    </svg>
+  );
+};
+
+/** Bình chất lỏng: điểm ở độ sâu h chịu áp suất p tác dụng theo mọi phương. */
+const LiquidPressureScene: React.FC<SceneProps> = ({ values }) => {
+  const { p, d, h } = values;
+  const t = useAnimationTime();
+  const look = liquidLook(d);
+  const surface = 22, bottom = 140;
+  // Độ sâu vẽ theo thang logarit để cả 10 cm lẫn hàng nghìn mét đều nằm trong bình
+  const y = logScale(h, 0.01, 11000, surface + 8, bottom - 10);
+  const len = logScale(p, 100, 200000000, 10, 30) * (0.9 + 0.1 * Math.sin(t * 3));
+  const px = 200;
+
+  return (
+    <svg viewBox="0 0 560 150" className="formula-scene">
+      <defs><Arrow id="liqArrow" color={C.force} /></defs>
+      <rect x="110" y={surface} width="180" height={bottom - surface} fill={look.fill} />
+      <path d={`M 110 8 L 110 ${bottom} L 290 ${bottom} L 290 8`} fill="none" stroke="#94a3b8" strokeWidth="2.5" />
+      <line x1="110" y1={surface} x2="290" y2={surface} stroke="#7dd3fc" strokeWidth="1.5" />
+      <text x="116" y={surface - 4} fill={C.dim} fontSize="10">mặt thoáng</text>
+      {/* Độ sâu h tính từ mặt thoáng */}
+      <line x1="300" y1={surface} x2="300" y2={y} stroke={C.warn} strokeWidth="1.5" />
+      <line x1="294" y1={surface} x2="306" y2={surface} stroke={C.warn} strokeWidth="1.5" />
+      <line x1="294" y1={y} x2="306" y2={y} stroke={C.warn} strokeWidth="1.5" />
+      <text x="310" y={(surface + y) / 2 + 4} fill={C.warn} fontSize="12" fontWeight="bold">h = {fmt(h)} m</text>
+      <line x1={px} y1={y} x2="300" y2={y} stroke={C.dim} strokeDasharray="3 3" />
+      {/* Áp suất tác dụng theo mọi phương */}
+      {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => {
+        const r = (a * Math.PI) / 180;
+        return (
+          <line key={a} x1={px + Math.cos(r) * (len + 6)} y1={y + Math.sin(r) * (len + 6)} x2={px + Math.cos(r) * 6} y2={y + Math.sin(r) * 6} stroke={C.force} strokeWidth="2" markerEnd="url(#liqArrow)" />
+        );
+      })}
+      <circle cx={px} cy={y} r="4" fill="#f8fafc" />
+      <text x="400" y="44" fill={C.ok} fontSize="15" fontWeight="bold">p = {fmt(p)} Pa</text>
+      <text x="400" y="68" fill={C.text} fontSize="12">Chất lỏng: {look.name}</text>
+      <text x="400" y="88" fill={C.text} fontSize="12">d = {fmt(d)} N/m³</text>
+      <text x="400" y="112" fill={C.dim} fontSize="11">Càng xuống sâu,</text>
+      <text x="400" y="126" fill={C.dim} fontSize="11">áp suất càng lớn</text>
+    </svg>
+  );
+};
+
+/** Vật chìm trong chất lỏng chịu lực đẩy Ác-si-mét hướng lên. */
+const BuoyancyScene: React.FC<SceneProps> = ({ values }) => {
+  const { FA, d, V } = values;
+  const t = useAnimationTime();
+  const look = liquidLook(d);
+  const size = logScale(V, 1, 10000000, 16, 64);
+  const cx = 200, cy = 92 + Math.sin(t * 1.6) * 2;
+  const arrow = logScale(FA, 0.01, 100000, 18, 52);
+
+  return (
+    <svg viewBox="0 0 560 150" className="formula-scene">
+      <defs><Arrow id="buoyArrow" color={C.ok} /></defs>
+      <rect x="100" y="30" width="200" height="110" fill={look.fill} />
+      <path d="M 100 10 L 100 140 L 300 140 L 300 10" fill="none" stroke="#94a3b8" strokeWidth="2.5" />
+      <line x1="100" y1="30" x2="300" y2="30" stroke="#7dd3fc" strokeWidth="1.5" />
+      <rect x={cx - size / 2} y={cy - size / 2} width={size} height={size} rx="3" fill="#b45309" stroke="#fcd34d" strokeWidth="1.5" />
+      <line x1={cx} y1={cy - size / 2 - 2} x2={cx} y2={cy - size / 2 - 2 - arrow} stroke={C.ok} strokeWidth="3" markerEnd="url(#buoyArrow)" />
+      <text x={cx + 10} y={cy - size / 2 - arrow + 6} fill={C.ok} fontSize="12" fontWeight="bold">F_A</text>
+      <text x={cx + size / 2 + 8} y={cy + 4} fill={C.warn} fontSize="11" fontWeight="bold">V = {fmt(V)} cm³</text>
+      <text x="400" y="44" fill={C.ok} fontSize="15" fontWeight="bold">F_A = {fmt(FA)} N</text>
+      <text x="400" y="68" fill={C.text} fontSize="12">Chất lỏng: {look.name}</text>
+      <text x="400" y="88" fill={C.text} fontSize="12">d = {fmt(d)} N/m³</text>
+      <text x="400" y="112" fill={C.dim} fontSize="11">Phần chìm càng lớn,</text>
+      <text x="400" y="126" fill={C.dim} fontSize="11">lực đẩy càng lớn</text>
+    </svg>
+  );
+};
+
+/* ------------------------------------------------------------------
    Chọn hình theo công thức
 ------------------------------------------------------------------ */
 
@@ -594,6 +721,9 @@ export const FormulaScene: React.FC<{ scene?: SceneId; values: Values }> = ({ sc
     case 'wire': return <WireScene values={values} />;
     case 'heat': return <HeatScene values={values} />;
     case 'mixing': return <MixingScene values={values} />;
+    case 'pressure': return <PressureScene values={values} />;
+    case 'liquid-pressure': return <LiquidPressureScene values={values} />;
+    case 'buoyancy': return <BuoyancyScene values={values} />;
     default: return null;
   }
 };

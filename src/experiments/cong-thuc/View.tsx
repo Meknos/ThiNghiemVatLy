@@ -118,8 +118,9 @@ export const CongThucView: React.FC<ViewProps<Values> & { def: FormulaDef }> = (
     }
   }, [shown, unknown.key, params, onParamChange]);
 
-  // Lời giải hiện dần từng bước để giáo viên dẫn dắt; mặc định hiện đủ
-  const [step, setStep] = useState(4);
+  // Lời giải nằm ở thẻ riêng để học sinh tự giải trước; mở thẻ thì hiện dần từng bước cho giáo viên dẫn dắt
+  const [tab, setTab] = useState<'lab' | 'solution'>('lab');
+  const [step, setStep] = useState(1);
   const [xKey, setXKey] = useState(known[0].key);
   const xVar = known.find((v) => v.key === xKey) ?? known[0];
   const xPower = relationPower(sol, xVar.key, find);
@@ -132,30 +133,84 @@ export const CongThucView: React.FC<ViewProps<Values> & { def: FormulaDef }> = (
   // Dạng tích tìm vế trái thì công thức gốc đã là lời giải; các dạng khác luôn viết lại biểu thức
   const showRearranged = find !== 1 || def.kind === 'sum' || def.kind === 'custom';
 
+  const given = (
+    <>
+      {known.map((v) => (
+        <div key={v.key} className="formula-given">
+          <span>{v.label}</span>
+          <b>{v.symbol} = {withUnit(v, values[v.key])}<i>{altText(v, values[v.key])}</i></b>
+        </div>
+      ))}
+      <div className="formula-given is-ask"><span>Tìm {unknown.label.toLowerCase()}</span><b>{unknown.symbol} = ?</b></div>
+    </>
+  );
+
+  const openSolution = () => {
+    setStep(1);
+    setTab('solution');
+  };
+
   return (
     <div className="experiment-stage-card">
       <div className="stage-header">
         <h3>{def.title}</h3>
         <div className="stage-badges">
           <span className="badge-tag">Tìm {unknown.label.toLowerCase()}</span>
-          <span className="badge-tag tag-success">{unknown.symbol} = {withUnit(unknown, answer)}</span>
+          {/* Đáp số chỉ hiện khi đã mở lời giải, để học sinh tự giải trước */}
+          {tab === 'solution' && step >= 4 && <span className="badge-tag tag-success">{unknown.symbol} = {withUnit(unknown, answer)}</span>}
         </div>
       </div>
 
-      <FormulaScene scene={def.scene} values={values} />
+      <div className="stage-tabs" role="tablist">
+        <button role="tab" aria-selected={tab === 'lab'} className={`stage-tab ${tab === 'lab' ? 'active' : ''}`} onClick={() => setTab('lab')}>
+          Thí nghiệm
+        </button>
+        <button role="tab" aria-selected={tab === 'solution'} className={`stage-tab ${tab === 'solution' ? 'active' : ''}`} onClick={() => (tab === 'solution' ? undefined : openSolution())}>
+          Lời giải
+        </button>
+      </div>
 
-      <div className="formula-body">
-        {/* LỜI GIẢI TỪNG BƯỚC */}
-        <div className="formula-solution">
+      {tab === 'lab' ? (
+        <>
+          <FormulaScene scene={def.scene} values={values} />
+
+          <div className="formula-body">
+            {/* ĐỀ BÀI: chỉ dữ kiện và đại lượng cần tìm, chưa có cách giải */}
+            <div className="formula-solution">
+              <div className="formula-step">
+                <div className="formula-step-title">Đề bài</div>
+                {given}
+              </div>
+              <div className="formula-step-actions">
+                <button className="quick-pill active" onClick={openSolution}>Xem lời giải từng bước</button>
+              </div>
+            </div>
+
+            {/* ĐỒ THỊ QUAN HỆ */}
+            <div className="formula-graph-box">
+              <div className="formula-graph-caption">
+                <b>{unknown.label}</b> {relationText(xPower)} <b>{xVar.label.toLowerCase()}</b>
+              </div>
+              <RelationGraph def={def} find={find} values={values} xVar={xVar} onChange={(key, value) => onParamChange(key, value)} />
+              {known.length > 1 && (
+                <div className="formula-graph-pick">
+                  <span>Xem theo:</span>
+                  {known.map((v) => (
+                    <button key={v.key} className={`quick-pill ${v.key === xVar.key ? 'active' : ''}`} onClick={() => setXKey(v.key)}>
+                      {v.symbol}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      ) : (
+        /* LỜI GIẢI TỪNG BƯỚC, chiếm cả khung để chiếu lên bảng */
+        <div className="formula-solution formula-solution-full">
           <div className="formula-step">
             <div className="formula-step-title">1. Tóm tắt</div>
-            {known.map((v) => (
-              <div key={v.key} className="formula-given">
-                <span>{v.label}</span>
-                <b>{v.symbol} = {withUnit(v, values[v.key])}<i>{altText(v, values[v.key])}</i></b>
-              </div>
-            ))}
-            <div className="formula-given is-ask"><span>Tìm {unknown.label.toLowerCase()}</span><b>{unknown.symbol} = ?</b></div>
+            {given}
           </div>
 
           {step >= 2 && (
@@ -183,33 +238,13 @@ export const CongThucView: React.FC<ViewProps<Values> & { def: FormulaDef }> = (
           )}
 
           <div className="formula-step-actions">
-            {step < 4 ? (
-              <button className="quick-pill active" onClick={() => setStep(step + 1)}>Bước tiếp theo</button>
-            ) : (
-              <button className="quick-pill" onClick={() => setStep(1)}>Ẩn lời giải, giải lại từng bước</button>
-            )}
+            {step < 4 && <button className="quick-pill active" onClick={() => setStep(step + 1)}>Bước tiếp theo</button>}
             {step < 4 && <button className="quick-pill" onClick={() => setStep(4)}>Hiện cả lời giải</button>}
+            {step >= 4 && <button className="quick-pill" onClick={() => setStep(1)}>Giải lại từ đầu</button>}
+            <button className="quick-pill" onClick={() => setTab('lab')}>Quay lại thí nghiệm</button>
           </div>
         </div>
-
-        {/* ĐỒ THỊ QUAN HỆ */}
-        <div className="formula-graph-box">
-          <div className="formula-graph-caption">
-            <b>{unknown.label}</b> {relationText(xPower)} <b>{xVar.label.toLowerCase()}</b>
-          </div>
-          <RelationGraph def={def} find={find} values={values} xVar={xVar} onChange={(key, value) => onParamChange(key, value)} />
-          {known.length > 1 && (
-            <div className="formula-graph-pick">
-              <span>Xem theo:</span>
-              {known.map((v) => (
-                <button key={v.key} className={`quick-pill ${v.key === xVar.key ? 'active' : ''}`} onClick={() => setXKey(v.key)}>
-                  {v.symbol}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      )}
 
       <div className="quick-orientation-bar">
         <span>Đại lượng cần tìm:</span>
@@ -218,7 +253,7 @@ export const CongThucView: React.FC<ViewProps<Values> & { def: FormulaDef }> = (
             {v.label} ({v.symbol})
           </button>
         ))}
-        <span className="stage-note">Kéo điểm vàng trên đồ thị để đổi số liệu.</span>
+        <span className="stage-note">{tab === 'lab' ? 'Kéo điểm vàng trên đồ thị để đổi số liệu.' : 'Bấm "Bước tiếp theo" để hiện dần lời giải.'}</span>
       </div>
     </div>
   );

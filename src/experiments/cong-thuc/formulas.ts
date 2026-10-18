@@ -83,7 +83,8 @@ export type FormulaDef = ProductFormula | SumFormula | CustomFormula;
 
 export type SceneId =
   | 'motion' | 'push' | 'lens' | 'lens-diverging' | 'echo' | 'wave' | 'lever' | 'series' | 'parallel'
-  | 'spring' | 'hydraulic' | 'heat' | 'mixing' | 'incline' | 'wire';
+  | 'spring' | 'hydraulic' | 'heat' | 'mixing' | 'incline' | 'wire'
+  | 'pressure' | 'liquid-pressure' | 'buoyancy';
 
 /* ------------------------------------------------------------------
    Bảng tra theo tên chất (SGK KHTN THCS)
@@ -194,11 +195,11 @@ export const FORMULAS: FormulaDef[] = [
     title: 'Tốc Độ, Quãng Đường, Thời Gian',
     group: 'Cơ học',
     topic: 'Tốc độ',
-    target: { key: 'v', symbol: 'v', latex: 'v', label: 'Tốc độ', unit: 'm/s', min: 0.5, max: 50, step: 0.5, defaultVal: 5, alt: { unit: 'km/h', factor: 3.6 } },
+    target: { key: 'v', symbol: 'v', latex: 'v', label: 'Tốc độ', unit: 'm/s', min: 0.5, max: 300, step: 0.5, defaultVal: 5, alt: { unit: 'km/h', factor: 3.6 } },
     coef: 1,
     factors: [
-      { key: 's', symbol: 's', latex: 's', label: 'Quãng đường', unit: 'm', min: 1, max: 100000, step: 1, defaultVal: 100, exp: 1, alt: { unit: 'km', factor: 0.001 } },
-      { key: 't', symbol: 't', latex: 't', label: 'Thời gian', unit: 's', min: 1, max: 36000, step: 1, defaultVal: 20, exp: -1, alt: { unit: 'phút', factor: 1 / 60 } }
+      { key: 's', symbol: 's', latex: 's', label: 'Quãng đường', unit: 'm', min: 1, max: 2000000, step: 1, defaultVal: 100, exp: 1, alt: { unit: 'km', factor: 0.001 } },
+      { key: 't', symbol: 't', latex: 't', label: 'Thời gian', unit: 's', min: 1, max: 360000, step: 1, defaultVal: 20, exp: -1, alt: { unit: 'phút', factor: 1 / 60 } }
     ],
     latex: 'v = \\frac{s}{t}',
     conditions: 'Tính bằng mét và giây: 1 km = 1000 m, 1 giờ = 3600 s, 1 m/s = 3,6 km/h. Công thức cho tốc độ trung bình trên cả quãng đường.',
@@ -211,12 +212,12 @@ export const FORMULAS: FormulaDef[] = [
     title: 'Tốc Độ Trung Bình Trên Hai Đoạn Đường',
     group: 'Cơ học',
     topic: 'Tốc độ',
-    target: { key: 'v', symbol: 'vtb', latex: 'v_{tb}', label: 'Tốc độ trung bình', unit: 'm/s', min: 0.1, max: 50, step: 0.1, defaultVal: 2, alt: { unit: 'km/h', factor: 3.6 } },
+    target: { key: 'v', symbol: 'vtb', latex: 'v_{tb}', label: 'Tốc độ trung bình', unit: 'm/s', min: 0.1, max: 300, step: 0.1, defaultVal: 2, alt: { unit: 'km/h', factor: 3.6 } },
     factors: [
-      { key: 's1', symbol: 's1', latex: 's_1', label: 'Quãng đường thứ nhất', unit: 'm', min: 1, max: 100000, step: 1, defaultVal: 1200, alt: { unit: 'km', factor: 0.001 }, cue: '(đầu|thứ nhất|đoạn 1|lúc đi|lên dốc)' },
-      { key: 't1', symbol: 't1', latex: 't_1', label: 'Thời gian đi đoạn thứ nhất', unit: 's', min: 1, max: 36000, step: 1, defaultVal: 600, alt: { unit: 'phút', factor: 1 / 60 } },
-      { key: 's2', symbol: 's2', latex: 's_2', label: 'Quãng đường thứ hai', unit: 'm', min: 1, max: 100000, step: 1, defaultVal: 1800, alt: { unit: 'km', factor: 0.001 }, cue: '(sau|tiếp theo|thứ hai|còn lại|đoạn 2|lúc về|xuống dốc)' },
-      { key: 't2', symbol: 't2', latex: 't_2', label: 'Thời gian đi đoạn thứ hai', unit: 's', min: 1, max: 36000, step: 1, defaultVal: 900, alt: { unit: 'phút', factor: 1 / 60 } }
+      { key: 's1', symbol: 's1', latex: 's_1', label: 'Quãng đường thứ nhất', unit: 'm', min: 1, max: 2000000, step: 1, defaultVal: 1200, alt: { unit: 'km', factor: 0.001 }, cue: '(đầu|thứ nhất|đoạn 1|lúc đi|lên dốc)' },
+      { key: 't1', symbol: 't1', latex: 't_1', label: 'Thời gian đi đoạn thứ nhất', unit: 's', min: 1, max: 360000, step: 1, defaultVal: 600, alt: { unit: 'phút', factor: 1 / 60 } },
+      { key: 's2', symbol: 's2', latex: 's_2', label: 'Quãng đường thứ hai', unit: 'm', min: 1, max: 2000000, step: 1, defaultVal: 1800, alt: { unit: 'km', factor: 0.001 }, cue: '(sau|tiếp theo|thứ hai|còn lại|đoạn 2|lúc về|xuống dốc)' },
+      { key: 't2', symbol: 't2', latex: 't_2', label: 'Thời gian đi đoạn thứ hai', unit: 's', min: 1, max: 360000, step: 1, defaultVal: 900, alt: { unit: 'phút', factor: 1 / 60 } }
     ],
     solve: {
       v: ({ s1, s2, t1, t2 }) => (s1 + s2) / (t1 + t2),
@@ -267,7 +268,7 @@ export const FORMULAS: FormulaDef[] = [
     ],
     latex: 'F_{đh} = k \\cdot \\Delta l',
     conditions: 'Đúng khi lò xo chưa bị giãn quá giới hạn đàn hồi. Độ giãn Δl = chiều dài lúc treo vật trừ chiều dài tự nhiên, đổi ra mét khi tính. Treo vật đứng yên thì Fđh = P = 10·m.',
-    aiHint: 'Các bài toán lò xo có độ cứng k: tính lực đàn hồi, độ giãn của lò xo hoặc độ cứng khi biết hai đại lượng còn lại.',
+    aiHint: 'Các bài toán lò xo có độ cứng k: tính lực đàn hồi, độ giãn của lò xo hoặc độ cứng khi biết hai đại lượng còn lại. Đề treo vật có khối lượng m (hoặc trọng lượng P) đứng yên vào lò xo thì PHẢI điền F = P = 10·m với m tính bằng kg (500 g thì F = 5), không được bỏ qua khối lượng.',
     scene: 'spring'
   },
   {
@@ -312,7 +313,8 @@ export const FORMULAS: FormulaDef[] = [
     ],
     latex: 'p = \\frac{F}{S}',
     conditions: 'Áp lực là lực ép vuông góc với mặt bị ép; vật đặt trên mặt nằm ngang thì F = P = 10·m. Diện tích đổi ra m² khi tính (1 cm² = 0,0001 m²); 1 Pa = 1 N/m².',
-    aiHint: 'Các bài tính toán áp suất p = F/S khi đề hỏi áp lực hoặc diện tích bị ép (ví dụ người nặng bao nhiêu, diện tích tiếp xúc tối thiểu để không lún). Bài chỉ hỏi áp suất của vật đặt trên mặt sàn thì ưu tiên mẫu ap-suat-chat-ran.'
+    aiHint: 'Các bài tính toán áp suất p = F/S khi đề hỏi áp lực hoặc diện tích bị ép (ví dụ người nặng bao nhiêu, diện tích tiếp xúc tối thiểu để không lún). Bài chỉ hỏi áp suất của vật đặt trên mặt sàn thì ưu tiên mẫu ap-suat-chat-ran.',
+    scene: 'pressure'
   },
   {
     id: 'ap-suat-chat-long-ct',
@@ -328,7 +330,8 @@ export const FORMULAS: FormulaDef[] = [
     latex: 'p = d \\cdot h',
     conditions: 'h là độ sâu tính từ mặt thoáng chất lỏng đến điểm đang xét, đổi ra mét. Nước 10 000, nước biển 10 300, dầu 8 000, thủy ngân 136 000 N/m³.',
     aiHint: 'Các bài tính toán áp suất chất lỏng p = d·h khi đề hỏi độ sâu (tàu ngầm, thợ lặn ở độ sâu bao nhiêu) hoặc trọng lượng riêng của chất lỏng. Bài chỉ hỏi áp suất tại một độ sâu cho trước thì ưu tiên mẫu ap-suat-chat-long.',
-    fromText: (text) => defined({ d: lookup(text, LIQUID_WEIGHT) })
+    fromText: (text) => defined({ d: lookup(text, LIQUID_WEIGHT) }),
+    scene: 'liquid-pressure'
   },
   {
     id: 'may-nen-thuy-luc',
@@ -361,7 +364,8 @@ export const FORMULAS: FormulaDef[] = [
     latex: 'F_A = d \\cdot V',
     conditions: 'V là thể tích phần vật chìm trong chất lỏng (vật chìm hẳn thì bằng thể tích vật), đổi ra m³ khi tính. Số chỉ lực kế khi nhúng vật giảm đúng bằng FA.',
     aiHint: 'Các bài tính toán lực đẩy Ác-si-mét F_A = d·V khi đề hỏi thể tích vật hoặc trọng lượng riêng chất lỏng (ví dụ biết số chỉ lực kế trong không khí và trong nước). Bài hỏi lực đẩy và điều kiện chìm nổi thì ưu tiên mẫu luc-day-archimedes.',
-    fromText: (text) => defined({ d: lookup(text, LIQUID_WEIGHT) })
+    fromText: (text) => defined({ d: lookup(text, LIQUID_WEIGHT) }),
+    scene: 'buoyancy'
   },
 
   /* ---------------- Cơ học: công, năng lượng, máy cơ đơn giản ---------------- */

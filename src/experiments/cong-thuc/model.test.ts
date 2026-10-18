@@ -13,6 +13,16 @@ describe('Thư viện công thức', () => {
     expect(solveFormula(def, { v: 5, s: 100, t: 0 }, 3).values.t).toBeCloseTo(20);
   });
 
+  it('tốc độ: nhận được đề đường dài (ô tô 120 km, tàu hỏa 1726 km trong 30 giờ)', () => {
+    const template = FORMULA_TEMPLATES.find((t) => t.id === 'toc-do')!;
+    for (const params of [{ s: 120000, t: 9000 }, { s: 1726000, t: 108000 }]) {
+      for (const [key, value] of Object.entries(params)) {
+        expect(value).toBeLessThanOrEqual(template.params[key].max);
+      }
+    }
+    expect(solveFormula(get('toc-do'), { v: 0, s: 120000, t: 9000 }, 1).values.v * 3.6).toBeCloseTo(48);
+  });
+
   it('trọng lượng: P = 10·m, và m = P / 10', () => {
     const def = get('trong-luong');
     expect(solveFormula(def, { P: 0, m: 2.5 }, 1).values.P).toBeCloseTo(25);

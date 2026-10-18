@@ -2093,6 +2093,17 @@ input:checked + .slider-toggle:before {
   .canvas-main-area {
     min-height: 85vh;
   }
+
+  /* Điện thoại: thí nghiệm hiện ngay đầu trang, rồi tới bảng điều chỉnh, cuối cùng là nhập đề và danh sách */
+  .canvas-main-area {
+    order: 1;
+  }
+  .sidebar-right {
+    order: 2;
+  }
+  .sidebar-left {
+    order: 3;
+  }
 }
 
 /* Bỏ toàn bộ hiệu ứng kính mờ và phát sáng ở khung */
@@ -2645,4 +2656,61 @@ input:checked + .slider-toggle:before {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ==========================================================================
+   THẺ "THÍ NGHIỆM" / "LỜI GIẢI" TRONG CÁC BÀI CÔNG THỨC
+   ========================================================================== */
+.stage-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.stage-tab {
+  flex: 1;
+  font-family: var(--font-sans);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.stage-tab:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.stage-tab.active {
+  background: #38bdf8;
+  color: #0b1121;
+}
+
+/* Lời giải chiếm cả khung, chữ to để chiếu lên bảng */
+.formula-solution-full {
+  flex: 1;
+  min-height: 0;
+  font-size: 1.1rem;
+  gap: 16px;
+  padding: 18px 22px;
+}
+
+.formula-solution-full .formula-step-title {
+  font-size: 0.95rem;
+}
+
+.formula-solution-full .formula-given {
+  font-size: 1.05rem;
+}
+
+.formula-solution-full .katex-display {
+  font-size: 1.3em;
 }
