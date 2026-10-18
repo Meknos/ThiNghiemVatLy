@@ -23,3 +23,13 @@ describe('Thí nghiệm Áp suất chất rắn', () => {
     expect(Number.isFinite(res.p)).toBe(true);
   });
 });
+
+describe('Mức lún minh họa', () => {
+  it('tăng theo áp suất và luôn nằm trong khoảng 0–1', () => {
+    const small = computeApSuat({ m: 2, S: 60 });
+    const large = computeApSuat({ m: 2, S: 10 });
+    expect(large.sinkRatio).toBeGreaterThan(small.sinkRatio);
+    expect(computeApSuat({ m: 10, S: 5 }).sinkRatio).toBeLessThan(1);
+    expect(computeApSuat({ m: 0.2, S: 100 }).sinkRatio).toBeGreaterThan(0);
+  });
+});

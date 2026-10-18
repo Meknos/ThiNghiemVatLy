@@ -35,3 +35,69 @@ describe('Thí nghiệm Mạch điện đơn giản', () => {
     expect(res.isShortCircuit).toBe(1);
   });
 });
+
+describe('Độ sáng của đèn', () => {
+  const base = { switchClosed: 1, wireBroken: 0 };
+
+  it('đèn 6 V mắc vào nguồn 6 V thì sáng bình thường', () => {
+    const res = computeMachDien({ ...base, voltage: 6, topology: 1 });
+    expect(res.brightness).toBeCloseTo(1, 5);
+    expect(res.overVoltage).toBe(0);
+  });
+
+  it('hai đèn nối tiếp: mỗi đèn chỉ nhận nửa hiệu điện thế nên sáng yếu hơn', () => {
+    const res = computeMachDien({ ...base, voltage: 6, topology: 2 });
+    expect(res.bulbVoltage).toBe(3);
+    expect(res.brightness).toBeCloseTo(0.25, 5);
+  });
+
+  it('hai đèn song song: mỗi đèn vẫn sáng bình thường, dòng qua nguồn gấp đôi', () => {
+    const one = computeMachDien({ ...base, voltage: 6, topology: 1 });
+    const par = computeMachDien({ ...base, voltage: 6, topology: 3 });
+    expect(par.brightness).toBeCloseTo(one.brightness, 5);
+    expect(par.currentEst).toBeCloseTo(2 * one.currentEst, 5);
+  });
+
+  it('đứt dây thì mạch hở dù công tắc đóng', () => {
+    const res = computeMachDien({ voltage: 6, switchClosed: 1, topology: 1, wireBroken: 1 });
+    expect(res.isClosed).toBe(0);
+    expect(res.currentEst).toBe(0);
+  });
+
+  it('đoản mạch: đèn không sáng, dòng điện lớn hơn nhiều so với mạch có đèn', () => {
+    const normal = computeMachDien({ ...base, voltage: 6, topology: 1 });
+    const short = computeMachDien({ ...base, voltage: 6, topology: 4 });
+    expect(short.bulb1Lit).toBe(0);
+    expect(short.currentEst).toBeGreaterThan(normal.currentEst * 10);
+  });
+
+  it('cảnh báo khi hiệu điện thế vượt xa định mức của đèn', () => {
+    expect(computeMachDien({ ...base, voltage: 12, topology: 1 }).overVoltage).toBe(1);
+    expect(computeMachDien({ ...base, voltage: 12, topology: 2 }).overVoltage).toBe(0);
+  });
+});
+
+describe('Tháo bóng đèn khỏi đui', () => {
+  const base = { voltage: 6, switchClosed: 1, wireBroken: 0 };
+
+  it('nối tiếp: tháo một đèn thì đèn còn lại cũng tắt', () => {
+    const res = computeMachDien({ ...base, topology: 2, bulb1Out: 1 });
+    expect(res.isClosed).toBe(0);
+    expect(res.bulb2Lit).toBe(0);
+    expect(res.currentEst).toBe(0);
+  });
+
+  it('song song: tháo một đèn thì đèn kia vẫn sáng bình thường, dòng qua nguồn giảm một nửa', () => {
+    const both = computeMachDien({ ...base, topology: 3 });
+    const one = computeMachDien({ ...base, topology: 3, bulb1Out: 1 });
+    expect(one.isClosed).toBe(1);
+    expect(one.bulb1Lit).toBe(0);
+    expect(one.bulb2Lit).toBe(1);
+    expect(one.brightness).toBeCloseTo(both.brightness, 5);
+    expect(one.currentEst).toBeCloseTo(both.currentEst / 2, 5);
+  });
+
+  it('song song: tháo cả hai đèn thì mạch hở', () => {
+    expect(computeMachDien({ ...base, topology: 3, bulb1Out: 1, bulb2Out: 1 }).isClosed).toBe(0);
+  });
+});

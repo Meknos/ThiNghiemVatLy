@@ -10,11 +10,15 @@ export interface KhoiLuongRiengOutputs {
   D_kg_m3: number;   // Khối lượng riêng (kg/m³)
   d_N_m3: number;    // Trọng lượng riêng (N/m³)
   material: string;  // Nhận diện kim loại/chất liệu
+  V2_used: number;   // Mực nước lúc sau dùng để tính (cm³), luôn lớn hơn V1
+  valid: boolean;    // false khi số liệu nhập vô lý (V2 ≤ V1)
 }
 
 export function computeKhoiLuongRieng(params: KhoiLuongRiengParams): KhoiLuongRiengOutputs {
   const m_g = Math.max(1, params.m_g);
   const V1 = Math.max(10, params.V1_cm3);
+  // Thả vật vào thì nước chỉ có thể dâng lên, nên V2 phải lớn hơn V1
+  const valid = params.V2_cm3 > V1;
   const V2 = Math.max(V1 + 1, params.V2_cm3);
 
   const V_obj = V2 - V1;
@@ -34,13 +38,15 @@ export function computeKhoiLuongRieng(params: KhoiLuongRiengParams): KhoiLuongRi
   else if (Math.abs(D_kg_m3 - 7800) < 500) material = 'Sắt / Thép (Fe)';
   else if (Math.abs(D_kg_m3 - 8900) < 500) material = 'Đồng (Cu)';
   else if (Math.abs(D_kg_m3 - 11300) < 600) material = 'Chì (Pb)';
-  else if (D_kg_m3 < 1000) material = 'Gỗ nhẹ / Nhựa nổi';
+  else if (D_kg_m3 < 1000) material = 'Nhẹ hơn nước (vật sẽ nổi)';
 
   return {
     V_obj,
     D_g_cm3: Number(D_g_cm3.toFixed(2)),
     D_kg_m3,
     d_N_m3,
-    material
+    material,
+    V2_used: V2,
+    valid
   };
 }

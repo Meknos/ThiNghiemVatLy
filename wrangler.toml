@@ -1,0 +1,14 @@
+# Cấu hình Cloudflare Pages cho AIPLab Studio
+# Giao diện: thư mục dist (npm run build). API: thư mục functions (tự nhận diện).
+name = "aiplab-studio"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Biến không bí mật. Khóa API (AI_API_KEY) KHÔNG ghi ở đây: đặt bằng
+#   npx wrangler pages secret put AI_API_KEY
+# hoặc trong trang quản lý Cloudflare. Khi chạy thử trên máy, ghi vào tệp .dev.vars.
+[vars]
+AI_BASE_URL = "https://discovery-api.intern-ai.org.cn/v1"
+AIPLAB_MODEL = "qwen3.8-27b"
+AIPLAB_RATE_LIMIT = "30"

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { EXPERIMENT_REGISTRY, getExperimentById } from '../core/registry';
 import { ExperimentLayout } from '../components/ExperimentLayout';
-import { dispatchContextToTemplate } from '../ai/dispatcher';
+import { ExperimentRequestResult, requestExperiment } from '../ai/client';
 
 export const App: React.FC = () => {
   // Sync with URL query param if present
@@ -12,20 +12,87 @@ export const App: React.FC = () => {
     return 'ap-suat-chat-ran';
   });
 
-  const [projectorMode, setProjectorMode] = useState<boolean>(false);
-  const [aiNotice, setAiNotice] = useState<string | null>(null);
+  // Tham số nạp sẵn cho thí nghiệm: từ liên kết chia sẻ hoặc trích từ đề bài.
+  // Mỗi lần mở một thí nghiệm là một đối tượng mới, nhờ đó bảng tham số được đặt lại.
+  const [session, setSession] = useState<{ params: Record<string, number> }>(() => {
+    const params: Record<string, number> = {};
+    new URLSearchParams(window.location.search).forEach((value, key) => {
+      const num = Number(value);
+      if (key !== 'exp' && value !== '' && Number.isFinite(num)) params[key] = num;
+    });
+    return { params };
+  });
+
+  const openExperiment = (id: string, params: Record<string, number> = {}) => {
+    setCurrentId(id);
+    setSession({ params });
+  };
+
+  // Chữ to: ghi nhớ trên máy để lần sau mở lại vẫn giữ cỡ chữ đã chọn
+  const [largeText, setLargeText] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('aiplab-large-text') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiNotice, setAiNotice] = useState<{
+    source: ExperimentRequestResult['source'];
+    unsupported: boolean;
+    summary: string;
+    filled: string[];
+    asks: string[];
+    notes: string[];
+    suggestion?: { id: string; title: string };
+  } | null>(null);
 
   useEffect(() => {
-    document.body.classList.toggle('projector-mode', projectorMode);
-  }, [projectorMode]);
+    document.documentElement.classList.toggle('large-text', largeText);
+    try {
+      localStorage.setItem('aiplab-large-text', largeText ? '1' : '0');
+    } catch {
+      // trình duyệt chặn lưu trữ: chỉ áp dụng cho lần mở này
+    }
+  }, [largeText]);
 
   const currentTemplate = getExperimentById(currentId) || EXPERIMENT_REGISTRY[0];
 
-  const handleGenerate = (prompt: string) => {
-    const res = dispatchContextToTemplate(prompt);
-    setCurrentId(res.templateId);
-    setAiNotice(res.message);
-    setTimeout(() => setAiNotice(null), 5000);
+  const handleGenerate = async (prompt: string) => {
+    if (aiBusy) return;
+    setAiBusy(true);
+    setAiNotice(null);
+    try {
+      const res = await requestExperiment(prompt);
+      const template = getExperimentById(res.templateId);
+
+      // Đề ngoài danh mục: không dựng bừa, chỉ gợi ý thí nghiệm gần nhất
+      if (res.status === 'unsupported' || !template) {
+        const suggested = res.suggestedTemplateId ? getExperimentById(res.suggestedTemplateId) : undefined;
+        setAiNotice({
+          source: res.source,
+          unsupported: true,
+          summary: res.summary,
+          filled: [],
+          asks: [],
+          notes: res.notes,
+          suggestion: suggested ? { id: suggested.id, title: suggested.title } : undefined
+        });
+        return;
+      }
+
+      openExperiment(template.id, res.params);
+      // Cho giáo viên thấy những số liệu đã lấy từ đề bài để kiểm tra lại
+      const filled = Object.entries(res.params)
+        .filter(([key]) => template.params[key])
+        .map(([key, value]) => {
+          const def = template.params[key];
+          return `${def.symbol} = ${String(value).replace('.', ',')}${def.unit ? ' ' + def.unit : ''}`;
+        });
+      setAiNotice({ source: res.source, unsupported: false, summary: res.summary, filled, asks: res.asks, notes: res.notes });
+    } finally {
+      setAiBusy(false);
+    }
   };
 
   return (
@@ -41,66 +108,81 @@ export const App: React.FC = () => {
             </svg>
           </div>
           <div className="app-title-group">
-            <div className="app-title-row">
-              <h1 className="app-title">AIPLab Studio</h1>
-              <span className="app-version-badge">KHTN THCS</span>
-            </div>
-            <p className="app-subtitle">Phòng Thí Nghiệm Vật Lý Tương Tác Trực Quan</p>
+            <h1 className="app-title">AIPLab Studio</h1>
           </div>
         </div>
 
-        {/* ELEGANT QUICK EXPERIMENT SELECTOR DROPDOWN */}
-        <div className="header-center-selector">
-          <div className="selector-label">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            <span>Thí nghiệm đang mở:</span>
-          </div>
+        {/* Ô chọn nhanh thí nghiệm */}
+        <label className="header-center-selector">
+          <span className="selector-label">Thí nghiệm:</span>
           <select
             className="header-dropdown-select"
             value={currentId}
-            onChange={(e) => setCurrentId(e.target.value)}
+            onChange={(e) => openExperiment(e.target.value)}
           >
             {EXPERIMENT_REGISTRY.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.grade ? `[Lớp ${t.grade}] ` : ''}{t.title} ({t.group})
+                {t.grade ? `Lớp ${t.grade} – ` : ''}{t.title}
               </option>
             ))}
           </select>
-        </div>
+        </label>
 
-        {/* HEADER CONTROLS (PROJECTOR, GRADE BADGE, HELP) */}
         <div className="header-right">
           <button
-            className={`ctrl-btn ${projectorMode ? 'btn-projector-active' : 'btn-secondary'}`}
-            onClick={() => setProjectorMode(!projectorMode)}
-            title="Chuyển đổi giao diện sáng cho máy chiếu lớp học"
+            type="button"
+            className={`btn-text-size ${largeText ? 'is-on' : ''}`}
+            onClick={() => setLargeText(!largeText)}
+            aria-pressed={largeText}
+            title="Phóng to hoặc thu nhỏ chữ trên toàn trang"
           >
-            <span className="icon-indicator">{projectorMode ? '☀️' : '🌙'}</span>
-            <span>{projectorMode ? 'Chế độ Máy Chiếu' : 'Chế độ Phòng Lab'}</span>
+            <span className="btn-text-size-icon">A+</span>
+            <span className="btn-text-size-label">{largeText ? 'Chữ thường' : 'Chữ to'}</span>
           </button>
-
-          <div className="env-badge" title="Chủ đề và khối lớp">
-            <span className="badge-dot" />
-            <span>{currentTemplate.group} {currentTemplate.grade ? `(Lớp ${currentTemplate.grade})` : ''}</span>
-          </div>
         </div>
       </header>
 
+      {/* Đang chờ AI đọc đề: báo rõ để giáo viên không tưởng là máy không phản hồi */}
+      {aiBusy && (
+        <div className="ai-notice-banner ai-busy-banner" role="status">
+          <span className="ai-busy-spinner" aria-hidden="true" />
+          <div className="ai-notice-body">
+            <div><b>Đang đọc đề bài…</b> Máy đang chọn thí nghiệm và lấy số liệu, thường mất 10–30 giây.</div>
+          </div>
+        </div>
+      )}
+
       {/* AI STATUS NOTIFICATION BANNER */}
       {aiNotice && (
-        <div className="ai-notice-banner">
-          <span className="ai-icon">✨</span>
-          <span>{aiNotice}</span>
-          <button className="btn-close-notice" onClick={() => setAiNotice(null)}>✕</button>
+        <div className={`ai-notice-banner ${aiNotice.unsupported ? 'is-unsupported' : ''}`}>
+          <span className={`ai-source-tag ${aiNotice.source === 'ai' ? 'is-ai' : ''}`}>
+            {aiNotice.source === 'ai' ? 'AI đã đọc đề' : 'Dò từ khóa'}
+          </span>
+          <div className="ai-notice-body">
+            <div>{aiNotice.unsupported ? `Chưa mô phỏng được: ${aiNotice.summary}` : aiNotice.summary}</div>
+            {aiNotice.filled.length > 0 && <div><b>Đã điền từ đề:</b> {aiNotice.filled.join('; ')}</div>}
+            {aiNotice.asks.length > 0 && <div><b>Cần tìm:</b> {aiNotice.asks.join('; ')}</div>}
+            {aiNotice.suggestion && (
+              <div>
+                <button className="ai-suggest-button" onClick={() => { openExperiment(aiNotice.suggestion!.id); setAiNotice(null); }}>
+                  Mở thí nghiệm gần nhất: {aiNotice.suggestion.title}
+                </button>
+              </div>
+            )}
+            {aiNotice.notes.map((note, i) => <div key={i} className="ai-notice-note">{note}</div>)}
+          </div>
+          <button className="btn-close-notice" onClick={() => setAiNotice(null)} title="Đóng thông báo" aria-label="Đóng thông báo">✕</button>
         </div>
       )}
 
       {/* MAIN WORKSPACE LAYOUT */}
       <ExperimentLayout
         template={currentTemplate}
-        onSelectExperiment={(id) => setCurrentId(id)}
+        presetParams={session.params}
+        onSelectExperiment={(id) => openExperiment(id)}
         allTemplates={EXPERIMENT_REGISTRY}
         onGenerateFromContext={handleGenerate}
+        generating={aiBusy}
       />
     </div>
   );

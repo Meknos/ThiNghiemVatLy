@@ -48,15 +48,15 @@ export class VirtualRuler {
     ctx.stroke();
 
     // Vạch chia thước đo
-    const numTicks = Math.floor(meterDist * 4); // Mỗi 0.25m 1 vạch
+    const numTicks = Math.floor(meterDist * 10); // Mỗi 10 cm một vạch
     if (numTicks > 0) {
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
       ctx.lineWidth = 1.5;
       for (let i = 0; i <= numTicks; i++) {
-        const t = i / numTicks;
+        const t = (i / 10) / meterDist;
         const tx = this.p1.x + dx * t;
         const ty = this.p1.y + dy * t;
-        const tickLen = i % 4 === 0 ? 10 : 5;
+        const tickLen = i % 5 === 0 ? 10 : 5;
         const normalX = -Math.sin(angleRad) * tickLen;
         const normalY = Math.cos(angleRad) * tickLen;
 
@@ -79,14 +79,14 @@ export class VirtualRuler {
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(midX - 55, midY - 12, 110, 24, 6);
+    ctx.roundRect(midX - 36, midY - 12, 72, 24, 6);
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = '#f8fafc';
     ctx.font = 'bold 11px JetBrains Mono';
     ctx.textAlign = 'center';
-    ctx.fillText(`d = ${meterDist.toFixed(2)}m (${angleDeg}°)`, midX, midY + 4);
+    ctx.fillText(`${meterDist.toFixed(2).replace('.', ',')} m`, midX, midY + 4);
 
     ctx.restore();
   }
@@ -168,8 +168,9 @@ export class VirtualPhotogate {
     this.height = 90;
     this.isDragging = false;
     this.dragOffset = { x: 0, y: 0 };
-    this.lastTriggeredTime = 0;
     this.log = [];
+    this.blocking = null;
+    this.lastRecord = null;
     this.onTriggerCallback = null;
   }
 
@@ -186,39 +187,74 @@ export class VirtualPhotogate {
     return this.active;
   }
 
-  checkCollision(bodies, currentTime, toMetersSpeed) {
-    if (!this.active) return;
-    if (currentTime - this.lastTriggeredTime < 0.3) return; // Debounce 300ms
+  reset() {
+    this.log = [];
+    this.blocking = null;
+    this.lastRecord = null;
+  }
+
+  /**
+   * Đo như cổng quang thật: ghi thời gian t mà vật chắn tia sáng, rồi tính
+   * tốc độ v = d / t với d là bề rộng của vật (tấm chắn sáng).
+   * Thời điểm vào/ra được nội suy theo vận tốc để không phụ thuộc bước mô phỏng.
+   */
+  update(bodies, currentTime, engine) {
+    if (!this.active) { this.blocking = null; return; }
 
     const gateTop = this.y - this.height / 2;
     const gateBottom = this.y + this.height / 2;
-
-    for (const body of bodies) {
-      if (body.isStatic) continue;
-
-      // Check if body bounding box or center intersects gate laser
-      const bx = body.position.x;
-      const by = body.position.y;
-      const r = body.circleRadius || Math.max(body.bounds.max.x - body.bounds.min.x, body.bounds.max.y - body.bounds.min.y) / 2;
-
-      if (Math.abs(bx - this.x) < r && by >= gateTop && by <= gateBottom) {
-        const speed = Math.hypot(body.velocity.x, body.velocity.y);
-        const speedMps = toMetersSpeed(speed);
-        this.lastTriggeredTime = currentTime;
-
-        const record = {
-          id: this.log.length + 1,
-          name: body.label || 'Vật thể',
-          time: currentTime.toFixed(2),
-          speed: speedMps.toFixed(2)
-        };
-        this.log.unshift(record);
-
-        if (this.onTriggerCallback) {
-          this.onTriggerCallback(record);
-        }
-        break;
+    // Dùng đỉnh của vật, vì body.bounds của Matter bị nới thêm theo vận tốc
+    const extent = (b) => {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const v of b.vertices) {
+        if (v.x < minX) minX = v.x;
+        if (v.x > maxX) maxX = v.x;
+        if (v.y < minY) minY = v.y;
+        if (v.y > maxY) maxY = v.y;
       }
+      return { minX, maxX, minY, maxY };
+    };
+    const blocks = (e) =>
+      e.minX <= this.x && e.maxX >= this.x && e.maxY >= gateTop && e.minY <= gateBottom;
+    const crossTime = (edgeX, vxPxPerSec) =>
+      Math.abs(vxPxPerSec) > 1e-6 ? currentTime - (edgeX - this.x) / vxPxPerSec : currentTime;
+
+    if (this.blocking) {
+      const b = this.blocking.body;
+      const e = extent(b);
+      if (blocks(e)) return;
+      const vx = engine.velocityMps(b).x * engine.scale;
+      const tExit = crossTime(vx >= 0 ? e.minX : e.maxX, vx);
+      const t = tExit - this.blocking.tEnter;
+      const d = this.blocking.width / engine.scale;
+      this.blocking = null;
+      if (t <= 0) return;
+
+      const record = {
+        id: this.log.length + 1,
+        name: b.label || 'Vật thể',
+        time: tExit.toFixed(2),
+        blockTime: t,
+        width: d,
+        speed: (d / t).toFixed(2)
+      };
+      this.lastRecord = record;
+      this.log.unshift(record);
+      if (this.onTriggerCallback) this.onTriggerCallback(record);
+      return;
+    }
+
+    for (const b of bodies) {
+      if (b.isStatic || engine.isBoundary(b)) continue;
+      const e = extent(b);
+      if (!blocks(e)) continue;
+      const vx = engine.velocityMps(b).x * engine.scale;
+      this.blocking = {
+        body: b,
+        width: e.maxX - e.minX,
+        tEnter: crossTime(vx >= 0 ? e.maxX : e.minX, vx)
+      };
+      break;
     }
   }
 
@@ -241,22 +277,41 @@ export class VirtualPhotogate {
     ctx.fillRect(this.x - 8, this.y + halfH, 16, 14);
     ctx.strokeRect(this.x - 8, this.y + halfH, 16, 14);
 
-    // Tia Laser hồng ngoại
-    const isLit = performance.now() / 1000 - this.lastTriggeredTime < 0.25;
-    ctx.strokeStyle = isLit ? 'rgba(239, 68, 68, 1)' : 'rgba(239, 68, 68, 0.45)';
-    ctx.lineWidth = isLit ? 3 : 1.5;
-    ctx.setLineDash(isLit ? [] : [4, 4]);
-
+    // Tia sáng: liền nét khi thông, đứt nét mờ khi đang bị vật chắn
+    const blocked = !!this.blocking;
+    ctx.strokeStyle = blocked ? 'rgba(239, 68, 68, 0.35)' : 'rgba(239, 68, 68, 0.95)';
+    ctx.lineWidth = blocked ? 1.5 : 2.5;
+    ctx.setLineDash(blocked ? [4, 4] : []);
     ctx.beginPath();
     ctx.moveTo(this.x, this.y - halfH);
     ctx.lineTo(this.x, this.y + halfH);
     ctx.stroke();
+    ctx.setLineDash([]);
 
-    // Nhãn Cổng quang
     ctx.fillStyle = '#f8fafc';
     ctx.font = 'bold 10px JetBrains Mono';
     ctx.textAlign = 'center';
-    ctx.fillText('PHOTOGATE', this.x, this.y - halfH - 20);
+    ctx.fillText('CỔNG QUANG', this.x, this.y - halfH - 20);
+
+    // Đồng hồ đo thời gian hiện số
+    const r = this.lastRecord;
+    const lines = blocked
+      ? ['Đang chắn sáng…']
+      : r
+        ? [`t = ${r.blockTime.toFixed(3)} s`, `d = ${r.width.toFixed(2)} m`, `v = d/t = ${r.speed} m/s`].map(s => s.replace(/\./g, ','))
+        : ['Chờ vật đi qua'];
+    const boxW = 138, boxH = 10 + lines.length * 14;
+    const bx = this.x + 16, by = this.y - halfH - 14;
+    ctx.fillStyle = 'rgba(9, 13, 22, 0.92)';
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.7)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, boxW, boxH, 5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#34d399';
+    ctx.textAlign = 'left';
+    lines.forEach((ln, k) => ctx.fillText(ln, bx + 8, by + 15 + k * 14));
 
     ctx.restore();
   }

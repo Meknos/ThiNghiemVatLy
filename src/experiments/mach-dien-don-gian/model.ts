@@ -1,77 +1,77 @@
-export type CircuitTopology = 'single' | 'series' | 'parallel' | 'short';
-
 export interface MachDienParams {
   voltage: number;         // Hiệu điện thế nguồn U (V)
   switchClosed: number;    // 1: Công tắc đóng, 0: Công tắc mở
-  topology: number;        // 1: 1 Đèn, 2: 2 Đèn nối tiếp, 3: 2 Đèn song song, 4: Đoản mạch
+  topology: number;        // 1: 1 đèn, 2: 2 đèn nối tiếp, 3: 2 đèn song song, 4: đoản mạch
   wireBroken: number;      // 0: Bình thường, 1: Đứt dây / hở mạch
+  bulb1Out?: number;       // 1: đèn Đ₁ bị tháo khỏi đui
+  bulb2Out?: number;       // 1: đèn Đ₂ bị tháo khỏi đui
 }
 
 export interface MachDienOutputs {
   isClosed: number;        // 1: Kín, 0: Hở
-  isShortCircuit: number;  // 1: Nguy hiểm đoản mạch! 0: An toàn
+  isShortCircuit: number;  // 1: Đoản mạch, 0: An toàn
   bulb1Lit: number;        // 1: Đèn 1 sáng, 0: Tắt
   bulb2Lit: number;        // 1: Đèn 2 sáng, 0: Tắt
-  currentEst: number;      // Dòng điện ước tính (A) (giả định R đèn = 10 Ohm)
+  currentEst: number;      // Cường độ dòng điện qua nguồn (A)
+  bulbVoltage: number;     // Hiệu điện thế giữa hai đầu mỗi đèn (V)
+  bulbCurrent: number;     // Cường độ dòng điện qua mỗi đèn (A)
+  brightness: number;      // Độ sáng của đèn đang sáng so với sáng bình thường (1 = sáng bình thường)
+  overVoltage: number;     // 1: đèn bị đặt hiệu điện thế cao hơn nhiều so với định mức
 }
+
+/** Bóng đèn 6 V có điện trở 10 Ω (coi như không đổi). */
+export const BULB_RESISTANCE = 10;
+export const BULB_RATED_VOLTAGE = 6;
+/** Khi đoản mạch chỉ còn điện trở rất nhỏ của dây và nguồn cản dòng điện. */
+export const SHORT_RESISTANCE = 0.5;
+
+const OPEN: MachDienOutputs = {
+  isClosed: 0, isShortCircuit: 0, bulb1Lit: 0, bulb2Lit: 0,
+  currentEst: 0, bulbVoltage: 0, bulbCurrent: 0, brightness: 0, overVoltage: 0
+};
 
 export function computeMachDien(params: MachDienParams): MachDienOutputs {
   const { voltage, switchClosed, topology, wireBroken } = params;
 
-  if (wireBroken === 1 || switchClosed === 0) {
-    return {
-      isClosed: 0,
-      isShortCircuit: 0,
-      bulb1Lit: 0,
-      bulb2Lit: 0,
-      currentEst: 0
-    };
-  }
+  // Dòng điện chỉ chạy trong mạch kín
+  if (wireBroken === 1 || switchClosed === 0) return { ...OPEN };
 
-  // Đoản mạch (nối trực tiếp 2 cực nguồn không qua tải)
+  // Tháo một bóng đèn là làm hở nhánh chứa đèn đó
+  const out1 = params.bulb1Out === 1;
+  const out2 = params.bulb2Out === 1;
+  if (topology === 1 && out1) return { ...OPEN };
+  if (topology === 2 && (out1 || out2)) return { ...OPEN }; // nối tiếp: hở một chỗ là hở cả mạch
+  if (topology === 3 && out1 && out2) return { ...OPEN };
+
+  // Đoản mạch: hai cực của nguồn bị nối tắt bằng dây dẫn, không qua bóng đèn
   if (topology === 4) {
     return {
+      ...OPEN,
       isClosed: 1,
       isShortCircuit: 1,
-      bulb1Lit: 0,
-      bulb2Lit: 0,
-      currentEst: 99.9 // Cực lớn
+      currentEst: Number((voltage / SHORT_RESISTANCE).toFixed(2))
     };
   }
 
-  const R_bulb = 10; // Giả định điện trở định mức bóng đèn là 10 Ω
+  // Nối tiếp: hiệu điện thế chia đều cho hai đèn. Song song: mỗi đèn nhận đủ U.
+  const bulbVoltage = topology === 2 ? voltage / 2 : voltage;
+  const bulbCurrent = bulbVoltage / BULB_RESISTANCE;
+  // Song song: mỗi nhánh còn đèn góp một dòng điện; nhánh bị tháo đèn không có dòng
+  const litBranches = topology === 3 ? (out1 ? 0 : 1) + (out2 ? 0 : 1) : 1;
+  const total = litBranches * bulbCurrent;
 
-  if (topology === 1) {
-    // 1 bóng đèn duy nhất
-    const current = voltage / R_bulb;
-    return {
-      isClosed: 1,
-      isShortCircuit: 0,
-      bulb1Lit: 1,
-      bulb2Lit: 0,
-      currentEst: Number(current.toFixed(2))
-    };
-  }
+  // Độ sáng theo công suất so với công suất định mức: (U/U_đm)²
+  const brightness = Math.pow(bulbVoltage / BULB_RATED_VOLTAGE, 2);
 
-  if (topology === 2) {
-    // 2 bóng đèn nối tiếp (R_td = 20 Ω)
-    const current = voltage / (2 * R_bulb);
-    return {
-      isClosed: 1,
-      isShortCircuit: 0,
-      bulb1Lit: 1,
-      bulb2Lit: 1,
-      currentEst: Number(current.toFixed(2))
-    };
-  }
-
-  // 2 bóng đèn song song (R_td = 5 Ω)
-  const current = voltage / (R_bulb / 2);
   return {
     isClosed: 1,
     isShortCircuit: 0,
-    bulb1Lit: 1,
-    bulb2Lit: 1,
-    currentEst: Number(current.toFixed(2))
+    bulb1Lit: out1 ? 0 : 1,
+    bulb2Lit: topology === 1 || out2 ? 0 : 1,
+    currentEst: Number(total.toFixed(2)),
+    bulbVoltage: Number(bulbVoltage.toFixed(2)),
+    bulbCurrent: Number(bulbCurrent.toFixed(2)),
+    brightness,
+    overVoltage: bulbVoltage > BULB_RATED_VOLTAGE * 1.5 ? 1 : 0
   };
 }

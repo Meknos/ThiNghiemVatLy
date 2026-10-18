@@ -1,254 +1,324 @@
 /**
- * AIPLab Studio — Thư viện bài thí nghiệm chuẩn SGK Khoa Học Tự Nhiên (THCS)
- * Bám sát chương trình KHTN 6, 7, 8 về Cơ học & Lực
+ * AIPLab Studio — Các bài thí nghiệm cơ học theo chương trình KHTN THCS.
+ *
+ * Mỗi bài có:
+ *  - setup(engine, w, h, st): dựng cảnh; st là trạng thái riêng của bài (giữ qua các lần dựng lại).
+ *  - hud(engine, st): các số liệu đo hiển thị cho giáo viên, dạng [{ label, value, bar?, color? }].
+ *  - actions: các nút thao tác, mỗi nút { label, run(engine, st), rebuild? }.
+ *
+ * Đơn vị: 1 m = engine.scale px, khối lượng tính bằng kg, lực tính bằng N.
  */
 import Matter from 'matter-js';
-const { Body, Constraint, Composite } = Matter;
+
+const fmt = (x, digits = 2) => x.toFixed(digits).replace('.', ',');
+
+function setMass(body, m) {
+  Matter.Body.setMass(body, m);
+}
+
+/** Đặt vận tốc cho vật theo m/s. */
+function setVelocityMps(engine, body, vx, vy) {
+  Matter.Body.setVelocity(body, { x: (vx * engine.scale) / 60, y: (vy * engine.scale) / 60 });
+}
 
 export const PRESET_EXPERIMENTS = [
   {
     id: 'hooke_spring',
-    title: 'Lò Xo Treo Quả Nặng (Độ Dãn Lò Xo)',
-    category: 'Lực & Biến Dạng',
+    title: 'Lò xo treo quả nặng',
     grade: 6,
-    desc: 'Khảo sát độ dãn của lò xo treo thẳng đứng tỉ lệ thuận với khối lượng quả nặng treo vào nó.',
-    setup: (engine, w, h) => {
+    desc: 'Độ giãn của lò xo treo thẳng đứng tỉ lệ thuận với khối lượng vật treo.',
+    initial: () => ({ m: 0.5 }),
+    setup: (engine, w, h, st) => {
       engine.clear();
-      engine.setGravity(10.0);
-      engine.setAirDrag(0.005);
+      const ax = w / 2, ay = 50;
+      const restLen = 110;
+      st.k = 20; // N/m
 
-      const anchorX = w / 2;
-      const anchorY = 70;
-      const restLen = 140;
-
-      // Quả nặng treo ban đầu 1kg (10N)
-      const weight = engine.addBox(anchorX, anchorY + restLen, 50, 40, {
-        density: 0.002,
+      st.weight = engine.addBox(ax, ay + restLen + 22, 60, 44, {
+        mass: st.m,
         friction: 0.2,
         restitution: 0.1,
         color: '#38bdf8',
-        label: 'Quả Nặng m=1kg (P=10N)'
+        label: 'Quả nặng'
+      });
+      st.spring = engine.addSpring(null, st.weight, restLen, st.k, 1.2, {
+        pointA: { x: ax, y: ay },
+        offsetB: { x: 0, y: -22 }
       });
 
-      // Lò xo đàn hồi kết nối từ điểm treo
-      const spring = Constraint.create({
-        pointA: { x: anchorX, y: anchorY },
-        bodyB: weight,
-        pointB: { x: 0, y: -20 },
-        stiffness: 0.02,
-        damping: 0.02,
-        length: restLen,
-        render: {
-          visible: true,
-          type: 'spring',
-          strokeStyle: '#38bdf8',
-          lineWidth: 3
-        }
-      });
-      Composite.add(engine.world, spring);
-
-      // Thước đo bên cạnh để đo độ dãn Δl
-      engine.ruler.p1 = { x: anchorX - 80, y: anchorY };
-      engine.ruler.p2 = { x: anchorX - 80, y: anchorY + restLen + 50 };
+      // Thước thẳng đứng đặt cạnh lò xo, vạch 0 ngang đầu dưới lò xo khi chưa treo vật
+      engine.ruler.p1 = { x: ax - 90, y: ay + restLen };
+      engine.ruler.p2 = { x: ax - 90, y: ay + restLen + 200 };
       engine.ruler.show();
-    }
+    },
+    update: (engine, st) => { st.m = st.weight.mass; },
+    hud: (engine, st) => {
+      const P = st.m * engine.gravityVal;
+      return [
+        { label: 'Khối lượng vật treo m', value: `${fmt(st.m, 1)} kg` },
+        { label: 'Trọng lượng P = 10·m', value: `${fmt(P, 1)} N` },
+        { label: 'Độ giãn lò xo đo được', value: `${fmt(engine.springExtensionM(st.spring) * 100, 1)} cm`, color: '#38bdf8' },
+        { label: 'Độ giãn khi cân bằng', value: `${fmt((P / st.k) * 100, 1)} cm` }
+      ];
+    },
+    actions: [
+      {
+        label: '＋ Treo thêm 0,5 kg',
+        run: (engine, st) => {
+          st.m = Math.min(2, st.weight.mass + 0.5);
+          setMass(st.weight, st.m);
+        }
+      },
+      {
+        label: '－ Bớt 0,5 kg',
+        run: (engine, st) => {
+          st.m = Math.max(0.5, st.weight.mass - 0.5);
+          setMass(st.weight, st.m);
+        }
+      }
+    ]
   },
   {
     id: 'friction_surfaces',
-    title: 'Lực Ma Sát Trượt Trên Các Bề Mặt',
-    category: 'Lực Tiếp Xúc',
+    title: 'Lực ma sát trượt trên các bề mặt',
     grade: 6,
-    desc: 'So sánh lực cản và quãng đường trượt của khối gỗ trên 3 bề mặt: Mặt băng (trơn), Mặt gỗ (vừa), Mặt nhám (lớn).',
-    setup: (engine, w, h) => {
+    desc: 'Ba khối gỗ giống nhau được đẩy với cùng tốc độ trên ba mặt khác nhau: mặt càng nhám, lực ma sát càng lớn, khối gỗ dừng càng sớm.',
+    initial: () => ({ v0: 2 }),
+    setup: (engine, w, h, st) => {
       engine.clear();
-      engine.setGravity(10.0);
-      engine.setAirDrag(0.0);
-
       const gy = engine.groundY;
-      const laneH = 40;
+      const lanes = [
+        { name: 'Mặt băng (trơn)', mu: 0.1, color: '#38bdf8' },
+        { name: 'Mặt gỗ', mu: 0.3, color: '#f59e0b' },
+        { name: 'Mặt giấy nhám', mu: 0.6, color: '#f43f5e' }
+      ];
+      const shelfW = w - 120;
+      st.blocks = lanes.map((lane, k) => {
+        const top = gy - 70 - k * 120;
+        const shelf = engine.addRamp(w / 2, top + 8, shelfW, 16, 0, {
+          friction: 0,
+          restitution: 0,
+          label: lane.name
+        });
+        shelf.customColor = lane.color;
 
-      // 3 Khối hộp được đẩy cùng tốc độ ban đầu v = 8 m/s trên 3 làn
-      // Làn 1: Mặt Băng (μ = 0.01)
-      const box1 = engine.addBox(120, gy - 80, 50, 30, {
-        friction: 0.01,
-        density: 0.002,
-        color: '#38bdf8',
-        label: 'Khối 1: Bề mặt băng (ít ma sát)'
+        const x0 = w / 2 - shelfW / 2 + 50;
+        const body = engine.addBox(x0, top - 18, 60, 36, {
+          mass: 1,
+          friction: 0,
+          restitution: 0,
+          color: lane.color,
+          label: `Khối gỗ trên ${lane.name.toLowerCase()}`
+        });
+        body.slideMu = lane.mu;
+        setVelocityMps(engine, body, st.v0, 0);
+        return { ...lane, body, x0 };
       });
-      Body.setVelocity(box1, { x: 12, y: 0 });
-
-      // Làn 2: Mặt Gỗ (μ = 0.25)
-      const box2 = engine.addBox(120, gy - 40, 50, 30, {
-        friction: 0.25,
-        density: 0.002,
-        color: '#f59e0b',
-        label: 'Khối 2: Bề mặt gỗ (ma sát vừa)'
-      });
-      Body.setVelocity(box2, { x: 12, y: 0 });
-
-      // Làn 3: Mặt Nhám (μ = 0.8)
-      const box3 = engine.addBox(120, gy, 50, 30, {
-        friction: 0.8,
-        density: 0.002,
-        color: '#f43f5e',
-        label: 'Khối 3: Bề mặt nhám (ma sát lớn)'
-      });
-      Body.setVelocity(box3, { x: 12, y: 0 });
-    }
+    },
+    hud: (engine, st) =>
+      st.blocks.flatMap(b => [
+        {
+          label: `${b.name}: lực ma sát`,
+          value: `${fmt(b.mu * b.body.mass * engine.gravityVal, 1)} N`
+        },
+        {
+          label: 'Quãng đường trượt',
+          value: `${fmt(Math.max(0, b.body.position.x - b.x0) / engine.scale)} m`,
+          color: b.color
+        }
+      ]),
+    actions: [
+      { label: 'Đẩy nhẹ (1 m/s)', rebuild: true, run: (engine, st) => { st.v0 = 1; } },
+      { label: 'Đẩy vừa (2 m/s)', rebuild: true, run: (engine, st) => { st.v0 = 2; } }
+    ]
   },
   {
     id: 'photogate_speed',
-    title: 'Đo Tốc Độ Chuyển Động Bằng Cổng Quang',
-    category: 'Tốc Độ',
+    title: 'Đo tốc độ bằng cổng quang điện',
     grade: 7,
-    desc: 'Khảo sát công thức tính tốc độ v = s / t bằng cách cho xe trượt đi qua cổng quang điện.',
-    setup: (engine, w, h) => {
+    desc: 'Xe có tấm chắn sáng rộng d đi qua cổng quang. Đồng hồ đo thời gian t tấm chắn che tia sáng, từ đó tính tốc độ v = d / t.',
+    initial: () => ({ v0: 2 }),
+    setup: (engine, w, h, st) => {
       engine.clear();
-      engine.setGravity(10.0);
-      engine.setAirDrag(0.0);
-
       const gy = engine.groundY;
-      const rampAngle = -15 * Math.PI / 180;
-      const rampX = w * 0.35;
-      const rampY = gy - 70;
 
-      // Đường trượt nghiêng nhẹ
-      engine.addRamp(rampX, rampY, 320, 20, rampAngle, {
-        friction: 0.02,
-        color: '#475569',
-        label: 'Đường trượt thực nghiệm'
-      });
-
-      // Xe trượt có cờ chắn quang
-      const cart = engine.addBox(rampX - 110, rampY - 70, 55, 30, {
-        friction: 0.02,
-        restitution: 0.1,
-        density: 0.002,
+      st.cart = engine.addBox(90, gy - 18, 50, 36, {
+        mass: 1,
+        friction: 0,
+        restitution: 0.2,
         color: '#10b981',
-        label: 'Xe Trượt Thí Nghiệm'
+        label: 'Xe có tấm chắn sáng'
       });
-      Body.setAngle(cart, rampAngle);
+      st.cart.slideMu = 0.02; // đệm khí: ma sát rất nhỏ
+      setVelocityMps(engine, st.cart, st.v0, 0);
 
-      // Đặt cổng quang điện ngay chân dốc
-      engine.photogate.x = rampX + 130;
-      engine.photogate.y = gy - 35;
+      engine.photogate.x = Math.round(w * 0.55);
+      engine.photogate.y = gy - 45;
       engine.photogate.show();
 
-      // Thước đo quãng đường trượt s
-      engine.ruler.p1 = { x: rampX - 110, y: rampY - 50 };
-      engine.ruler.p2 = { x: rampX + 130, y: gy - 35 };
+      // Thước đo bề rộng tấm chắn sáng d
+      engine.ruler.p1 = { x: 65, y: gy - 60 };
+      engine.ruler.p2 = { x: 115, y: gy - 60 };
       engine.ruler.show();
-    }
+    },
+    hud: (engine, st) => {
+      const r = engine.photogate.lastRecord;
+      return [
+        { label: 'Bề rộng tấm chắn sáng d', value: '0,50 m' },
+        { label: 'Thời gian chắn sáng t', value: r ? `${fmt(r.blockTime, 3)} s` : '—' },
+        { label: 'Tốc độ v = d / t', value: r ? `${String(r.speed).replace('.', ',')} m/s` : '—', color: '#34d399' },
+        { label: 'Tốc độ xe lúc này', value: `${fmt(Math.abs(engine.velocityMps(st.cart).x))} m/s` }
+      ];
+    },
+    actions: [
+      { label: 'Đẩy chậm (1 m/s)', rebuild: true, run: (engine, st) => { st.v0 = 1; } },
+      { label: 'Đẩy vừa (2 m/s)', rebuild: true, run: (engine, st) => { st.v0 = 2; } },
+      { label: 'Đẩy nhanh (4 m/s)', rebuild: true, run: (engine, st) => { st.v0 = 4; } }
+    ]
   },
   {
     id: 'lever_balance',
-    title: 'Đòn Bẩy Cân Bằng (Quy Tắc Đòn Bẩy)',
-    category: 'Máy Cơ Đơn Giản',
+    title: 'Đòn bẩy và mô men lực',
     grade: 8,
-    desc: 'Khảo sát điều kiện cân bằng của đòn bẩy: F₁ · d₁ = F₂ · d₂ quanh điểm tựa O.',
-    setup: (engine, w, h) => {
+    desc: 'Đòn bẩy cân bằng khi mô men lực hai bên bằng nhau: F₁·d₁ = F₂·d₂.',
+    initial: () => ({ m1: 2, d1: 1.2, m2: 4, d2: 0.6 }),
+    setup: (engine, w, h, st) => {
       engine.clear();
-      engine.setGravity(10.0);
-      engine.setAirDrag(0.002);
-
       const gy = engine.groundY;
-      const fulcrumX = w / 2;
-      const fulcrumY = gy - 50;
+      const px = w / 2;
+      const py = gy - 240;
+      const S = engine.scale;
+      const BAR = 0x0004, STOP = 0x0008;
 
-      // Điểm tựa tam giác O
-      engine.addRamp(fulcrumX, fulcrumY + 25, 60, 40, 0, {
+      // Giá đỡ: chỉ để nhìn, không va chạm
+      const post = engine.addBox(px, (py + gy) / 2 + 8, 14, gy - py - 16, {
         isStatic: true,
-        color: '#64748b',
-        label: 'Điểm Tựa O'
+        label: ' '
       });
+      post.collisionFilter.mask = 0;
 
-      // Thanh đòn bẩy dài 360px
-      const bar = engine.addBox(fulcrumX, fulcrumY, 360, 16, {
+      // Thanh đòn bẩy, trục quay O nằm ngay trên trọng tâm thanh nên thanh tự cân bằng
+      st.bar = engine.addBox(px, py + 5, 400, 12, {
+        mass: 1,
         friction: 0.4,
-        density: 0.001,
+        frictionAir: 0.03,
         color: '#38bdf8',
-        label: 'Thanh Đòn Bẩy AB'
+        label: 'Thanh đòn bẩy'
+      });
+      st.bar.collisionFilter.category = BAR;
+      engine.addPin(st.bar, px, py);
+
+      // Hai chốt chặn giới hạn góc nghiêng của thanh
+      [-1, 1].forEach(side => {
+        const stop = engine.addBox(px + side * 185, py + 78, 16, 8, { isStatic: true, label: ' ' });
+        stop.collisionFilter.category = STOP;
+        stop.collisionFilter.mask = BAR;
       });
 
-      // Khớp trục xoay tại tâm điểm tựa O
-      engine.addPin(bar, fulcrumX, fulcrumY);
-
-      // Quả nặng bên trái: m = 2kg tại d1 = 120px
-      engine.addBox(fulcrumX - 120, fulcrumY - 25, 35, 35, {
-        density: 0.004,
-        friction: 0.8,
-        color: '#f59e0b',
-        label: 'Vật 1 (m₁=2kg, d₁=12cm)'
+      const hang = (m, d, side, color, name) => {
+        const weight = engine.addBox(px + side * d * S, py + 5 + 110, 46, 40, {
+          mass: m,
+          frictionAir: 0.02,
+          color,
+          label: name
+        });
+        weight.collisionFilter.mask = 0xFFFFFFFF & ~STOP & ~BAR;
+        engine.addSpring(st.bar, weight, 90, 3000, 25, {
+          offsetA: { x: side * d * S, y: 0 },
+          offsetB: { x: 0, y: -20 },
+          rope: true
+        });
+        return weight;
+      };
+      st.w1 = hang(st.m1, st.d1, -1, '#f59e0b', 'Vật 1');
+      st.w2 = hang(st.m2, st.d2, 1, '#10b981', 'Vật 2');
+      st.pivotX = px;
+    },
+    // Cầm một quả nặng kéo sang ngang: điểm treo trượt theo dọc thanh (bước 0,1 m)
+    update: (engine, st) => {
+      // Dù bị giật mạnh, thanh cũng không quay vượt qua hai chốt chặn
+      const limit = 0.45;
+      if (Math.abs(st.bar.angle) > limit) {
+        Matter.Body.setAngle(st.bar, Math.sign(st.bar.angle) * limit);
+        Matter.Body.setAngularVelocity(st.bar, 0);
+      }
+      st.m1 = st.w1.mass;
+      st.m2 = st.w2.mass;
+      const dragged = engine.mouseConstraint.body;
+      [[st.w1, -1, 'd1'], [st.w2, 1, 'd2']].forEach(([weight, side, key]) => {
+        if (dragged !== weight) return;
+        const rope = engine.springs.find(s => s.bodyB === weight);
+        const d = Math.round((side * (weight.position.x - st.pivotX)) / engine.scale * 10) / 10;
+        st[key] = Math.max(0.2, Math.min(1.8, d));
+        rope.offsetA.x = side * st[key] * engine.scale;
       });
-
-      // Quả nặng bên phải: m = 4kg tại d2 = 60px (cân bằng 2 * 120 = 4 * 60)
-      engine.addBox(fulcrumX + 60, fulcrumY - 25, 45, 35, {
-        density: 0.008,
-        friction: 0.8,
-        color: '#10b981',
-        label: 'Vật 2 (m₂=4kg, d₂=6cm)'
-      });
-    }
+    },
+    hud: (engine, st) => {
+      const g = engine.gravityVal;
+      const M1 = st.m1 * g * st.d1, M2 = st.m2 * g * st.d2;
+      const tilt = (st.bar.angle * 180) / Math.PI;
+      const state = Math.abs(M1 - M2) < 0.05
+        ? 'Cân bằng'
+        : M1 > M2 ? 'Nghiêng về phía vật 1' : 'Nghiêng về phía vật 2';
+      return [
+        { label: `Vật 1: F₁ = ${fmt(st.m1 * g, 0)} N, d₁ = ${fmt(st.d1, 1)} m`, value: `${fmt(M1, 1)} N·m`, color: '#f59e0b' },
+        { label: `Vật 2: F₂ = ${fmt(st.m2 * g, 0)} N, d₂ = ${fmt(st.d2, 1)} m`, value: `${fmt(M2, 1)} N·m`, color: '#10b981' },
+        { label: 'Góc nghiêng của thanh', value: `${fmt(Math.abs(tilt), 1)}°` },
+        { label: 'Trạng thái', value: state }
+      ];
+    },
+    actions: [
+      { label: 'Vật 2 ra xa điểm tựa (+0,2 m)', rebuild: true, run: (engine, st) => { st.d2 = Math.min(1.8, +(st.d2 + 0.2).toFixed(1)); } },
+      { label: 'Vật 2 lại gần (−0,2 m)', rebuild: true, run: (engine, st) => { st.d2 = Math.max(0.2, +(st.d2 - 0.2).toFixed(1)); } },
+      { label: 'Về vị trí cân bằng', rebuild: true, run: (engine, st) => { st.d2 = (st.m1 * st.d1) / st.m2; } }
+    ]
   },
   {
     id: 'energy_transformation',
-    title: 'Chuyển Hóa Động Năng & Thế Năng',
-    category: 'Năng Lượng',
+    title: 'Chuyển hóa động năng và thế năng',
     grade: 9,
-    desc: 'Vật trượt từ đỉnh dốc: thế năng chuyển hóa thành động năng, cơ năng được bảo toàn khi bỏ qua ma sát.',
-    setup: (engine, w, h) => {
+    desc: 'Con lắc dao động: thế năng chuyển hóa thành động năng và ngược lại. Khi bỏ qua lực cản, cơ năng được bảo toàn.',
+    initial: () => ({ angle: 40 }),
+    setup: (engine, w, h, st) => {
       engine.clear();
-      engine.setGravity(10.0);
-      engine.setAirDrag(0.0);
+      const px = w / 2, py = 40;
+      const L = Math.min(300, engine.groundY - py - 70);
+      const th = (st.angle * Math.PI) / 180;
+      st.lowestY = py + L;
 
-      const gy = engine.groundY;
-      const angle = -25 * Math.PI / 180;
-      const rampX = w * 0.32;
-      const rampY = gy - 90;
-
-      // Dốc trượt nhẵn không ma sát
-      engine.addRamp(rampX, rampY, 340, 20, angle, {
-        friction: 0.0,
-        restitution: 0.0,
-        color: '#475569',
-        label: 'Mặt Dốc Nhẵn (μ=0)'
-      });
-
-      // Quả cầu thả rơi từ đỉnh dốc
-      const ball = engine.addCircle(rampX - 120, rampY - 95, 20, {
-        friction: 0.0,
+      st.bob = engine.addCircle(px - L * Math.sin(th), py + L * Math.cos(th), 22, {
+        mass: 1,
+        friction: 0,
         restitution: 0.2,
-        density: 0.003,
-        color: '#10b981',
-        label: 'Quả Cầu (Thế Năng Cực Đại)'
+        color: '#ec4899',
+        label: 'Quả nặng con lắc'
       });
-      Body.setAngle(ball, angle);
-    }
+      // Dây treo: lò xo rất cứng, không giảm chấn nên không làm hao cơ năng
+      engine.addSpring(null, st.bob, L, 6000, 0, { pointA: { x: px, y: py }, rope: true });
+      st.W0 = st.bob.mass * engine.gravityVal * ((st.lowestY - st.bob.position.y) / engine.scale);
+    },
+    // Cầm quả nặng kéo lệch rồi thả: cơ năng ban đầu là cơ năng lúc buông tay
+    update: (engine, st) => {
+      if (engine.mouseConstraint.body !== st.bob) return;
+      const v = engine.velocityMps(st.bob);
+      st.W0 = 0.5 * st.bob.mass * (v.x * v.x + v.y * v.y) +
+        st.bob.mass * engine.gravityVal * ((st.lowestY - st.bob.position.y) / engine.scale);
+    },
+    hud: (engine, st) => {
+      const v = engine.velocityMps(st.bob);
+      const Wd = 0.5 * st.bob.mass * (v.x * v.x + v.y * v.y);
+      const Wt = st.bob.mass * engine.gravityVal * ((st.lowestY - st.bob.position.y) / engine.scale);
+      const ref = Math.max(st.W0, 0.01);
+      return [
+        { label: 'Thế năng Wt (mốc: vị trí thấp nhất)', value: `${fmt(Wt)} J`, bar: Wt / ref, color: '#f59e0b' },
+        { label: 'Động năng Wđ', value: `${fmt(Wd)} J`, bar: Wd / ref, color: '#10b981' },
+        { label: 'Cơ năng W = Wđ + Wt', value: `${fmt(Wd + Wt)} J`, bar: (Wd + Wt) / ref, color: '#38bdf8' }
+      ];
+    },
+    actions: [
+      { label: 'Thả từ góc 20°', rebuild: true, run: (engine, st) => { st.angle = 20; } },
+      { label: 'Thả từ góc 40°', rebuild: true, run: (engine, st) => { st.angle = 40; } },
+      { label: 'Thả từ góc 60°', rebuild: true, run: (engine, st) => { st.angle = 60; } }
+    ]
   }
 ];
-
-export function parseContextAndGenerate(prompt, engine, w, h) {
-  const text = prompt.toLowerCase();
-  if (text.includes('lò xo') || text.includes('dãn') || text.includes('treo')) {
-    PRESET_EXPERIMENTS[0].setup(engine, w, h);
-    return;
-  }
-  if (text.includes('ma sát') || text.includes('trơn') || text.includes('nhám')) {
-    PRESET_EXPERIMENTS[1].setup(engine, w, h);
-    return;
-  }
-  if (text.includes('tốc độ') || text.includes('cổng quang') || text.includes('vận tốc')) {
-    PRESET_EXPERIMENTS[2].setup(engine, w, h);
-    return;
-  }
-  if (text.includes('đòn bẩy') || text.includes('cân bằng') || text.includes('điểm tựa')) {
-    PRESET_EXPERIMENTS[3].setup(engine, w, h);
-    return;
-  }
-  if (text.includes('động năng') || text.includes('thế năng') || text.includes('cơ năng')) {
-    PRESET_EXPERIMENTS[4].setup(engine, w, h);
-    return;
-  }
-  // Mặc định
-  PRESET_EXPERIMENTS[0].setup(engine, w, h);
-}

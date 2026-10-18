@@ -47,6 +47,6 @@ export const phanXaAnhSangTemplate: ExperimentTemplate<PhanXaParams> = {
     "\\text{Góc hợp với mặt gương} = 90^\\circ - i"
   ],
   conditions: 'Tia phản xạ nằm trong mặt phẳng tới và ở phía bên kia pháp tuyến so với tia tới. Góc đo luôn tính so với pháp tuyến.',
-  aiHint: 'Các bài toán chiếu tia sáng tới gương phẳng với góc tới i, hoặc góc hợp bởi tia tới và mặt gương; yêu cầu tính góc phản xạ hoặc góc tạo bởi 2 tia.',
+  aiHint: 'Các bài toán chiếu tia sáng tới MỘT gương phẳng với góc tới i, hoặc góc hợp bởi tia tới và mặt gương; yêu cầu tính góc phản xạ hoặc góc tạo bởi 2 tia. Đề có hai gương thì dùng mẫu hai-guong-phang.',
   View: PhanXaView
 };

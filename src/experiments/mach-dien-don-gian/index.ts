@@ -28,8 +28,8 @@ export const machDienDonGianTemplate: ExperimentTemplate<MachDienParams> = {
       defaultVal: 1
     },
     topology: {
-      label: 'Cấu hình mạch (1: 1 Đèn, 2: Nối tiếp, 3: Song song, 4: Đoản mạch)',
-      symbol: 'Mode',
+      label: 'Cách mắc (1: một đèn, 2: nối tiếp, 3: song song, 4: đoản mạch)',
+      symbol: 'Mắc',
       unit: '',
       min: 1,
       max: 4,
@@ -38,7 +38,25 @@ export const machDienDonGianTemplate: ExperimentTemplate<MachDienParams> = {
     },
     wireBroken: {
       label: 'Đứt dây dẫn (1: Có, 0: Không)',
-      symbol: 'Break',
+      symbol: 'Đứt',
+      unit: '',
+      min: 0,
+      max: 1,
+      step: 1,
+      defaultVal: 0
+    },
+    bulb1Out: {
+      label: 'Tháo đèn Đ₁ khỏi đui (1: Có, 0: Không)',
+      symbol: 'Tháo Đ₁',
+      unit: '',
+      min: 0,
+      max: 1,
+      step: 1,
+      defaultVal: 0
+    },
+    bulb2Out: {
+      label: 'Tháo đèn Đ₂ khỏi đui (1: Có, 0: Không)',
+      symbol: 'Tháo Đ₂',
       unit: '',
       min: 0,
       max: 1,
@@ -47,28 +65,27 @@ export const machDienDonGianTemplate: ExperimentTemplate<MachDienParams> = {
     }
   },
   outputs: [
-    { label: 'Trạng thái mạch', symbol: 'Kín/Hở', unit: '' },
-    { label: 'Cảnh báo đoản mạch', symbol: 'Short', unit: '' },
-    { label: 'Đèn 1 phát sáng', symbol: 'Đ₁', unit: '' },
-    { label: 'Đèn 2 phát sáng', symbol: 'Đ₂', unit: '' },
-    { label: 'Cường độ dòng điện ước tính', symbol: 'I', unit: 'A' }
+    { label: 'Mạch kín (1) hay hở (0)', symbol: 'Kín', unit: '' },
+    { label: 'Cường độ dòng điện qua nguồn', symbol: 'I', unit: 'A' },
+    { label: 'Hiệu điện thế hai đầu mỗi đèn', symbol: 'U_đ', unit: 'V' },
+    { label: 'Cường độ dòng điện qua mỗi đèn', symbol: 'I_đ', unit: 'A' }
   ],
   compute: (p) => {
     const res = computeMachDien(p);
     return {
-      'Kín/Hở': res.isClosed,
-      'Short': res.isShortCircuit,
-      'Đ₁': res.bulb1Lit,
-      'Đ₂': res.bulb2Lit,
-      'I': res.currentEst
+      'Kín': res.isClosed,
+      'I': res.currentEst,
+      'U_đ': res.bulbVoltage,
+      'I_đ': res.bulbCurrent
     };
   },
   formulas: [
-    '\\text{Mạch kín khi có dòng điện chạy từ cực dương qua tải về cực âm}',
-    'I = \\frac{U}{R} \\quad (\\text{Định luật Ôm})',
-    '\\text{Đoản mạch: nối tắt 2 cực nguồn điện, } I \\to \\infty'
+    '\\text{Dòng điện chỉ chạy trong mạch kín: cực dương} \\to \\text{dây dẫn, đèn} \\to \\text{cực âm}',
+    '\\text{Nối tiếp: } I = I_1 = I_2; \\quad U = U_1 + U_2',
+    '\\text{Song song: } I = I_1 + I_2; \\quad U = U_1 = U_2',
+    '\\text{Đoản mạch: dòng điện rất lớn, làm nóng dây dẫn và nguồn điện}'
   ],
-  conditions: 'Dòng điện chỉ chạy trong mạch điện kín gồm các vật dẫn nối liền từ cực dương sang cực âm của nguồn điện.',
+  conditions: 'Mỗi bóng đèn trong mô phỏng là đèn 6 V, điện trở 10 Ω coi như không đổi. Độ sáng vẽ theo công suất so với định mức. Khi đoản mạch, dòng điện tính với điện trở 0,5 Ω của dây và nguồn, chỉ để minh họa rằng dòng điện rất lớn.',
   aiHint: 'Các bài toán về lắp ráp mạch điện với pin, bóng đèn, công tắc; kiểm tra mạch hở, mạch kín; hiện tượng đoản mạch; mắc bóng đèn nối tiếp hoặc song song.',
   View: MachDienView
 };

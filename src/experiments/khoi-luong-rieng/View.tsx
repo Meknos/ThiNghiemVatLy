@@ -1,165 +1,220 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ViewProps } from '../../core/types';
-import { KhoiLuongRiengParams } from './model';
+import { useAnimationTime, useSpring, useSvgDrag, vn } from '../../core/anim';
+import { KhoiLuongRiengParams, computeKhoiLuongRieng } from './model';
 
-export const KhoiLuongRiengView: React.FC<ViewProps<KhoiLuongRiengParams>> = ({
-  params,
-  outputs,
-  onParamChange
-}) => {
-  const { m_g, V1_cm3, V2_cm3 } = params;
-  const { V_obj, D_g_cm3, D_kg_m3, material } = outputs;
+const PAN = { x: 130, y: 262 };
+const CYL = { x: 430, innerW: 66, zeroY: 334, pxPerMl: 2.4 };
+const LIFT_Y = 60;
+
+const levelY = (ml: number) => CYL.zeroY - ml * CYL.pxPerMl;
+const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+
+function sampleColor(D: number) {
+  if (Math.abs(D - 2700) < 300) return { fill: '#cbd5e1', stroke: '#f1f5f9' };  // nhôm
+  if (Math.abs(D - 7800) < 500) return { fill: '#64748b', stroke: '#94a3b8' };  // sắt
+  if (Math.abs(D - 8900) < 500) return { fill: '#c2703d', stroke: '#fdba74' };  // đồng
+  if (Math.abs(D - 11300) < 600) return { fill: '#475569', stroke: '#7c8ba1' }; // chì
+  return { fill: '#f59e0b', stroke: '#fde68a' };
+}
+
+export const KhoiLuongRiengView: React.FC<ViewProps<KhoiLuongRiengParams>> = ({ params, onParamChange }) => {
+  const { m_g, V1_cm3 } = params;
+  const { V_obj, D_g_cm3, D_kg_m3, material, V2_used, valid } = computeKhoiLuongRieng(params);
+  const t = useAnimationTime();
+
+  // Bước 1: cân vật. Bước 2: thả vật vào bình chia độ.
+  const [inCylinder, setInCylinder] = useState(false);
+  const autoDrop = useRef(0);
+  useEffect(() => {
+    autoDrop.current = window.setTimeout(() => setInCylinder(true), 900);
+    return () => window.clearTimeout(autoDrop.current);
+  }, []);
+  const [jump, setJump] = useState({ key: 0, value: 0 });
+  const u = clamp01(useSpring(inCylinder ? 1 : 0, { stiffness: 14, damping: 7.5, jump }));
+
+  const side = 16 + Math.cbrt(V_obj) * 6.5;
+  const color = sampleColor(D_kg_m3);
+
+  // Đường đi của vật: nhấc lên khỏi đĩa cân, đưa sang ngang, hạ xuống đáy bình
+  const start = { x: PAN.x, y: PAN.y - side };
+  const end = { x: CYL.x, y: CYL.zeroY - 2 - side };
+  const a = clamp01(u / 0.3), b = clamp01((u - 0.3) / 0.3), c = clamp01((u - 0.6) / 0.4);
+
+  // Tự tay cầm vật: kéo từ đĩa cân sang miệng bình rồi thả vào nước
+  const [held, setHeld] = useState<{ x: number; y: number } | null>(null);
+  const overCylinder = (x: number) => Math.abs(x - CYL.x) < CYL.innerW / 2 + 14;
+  const mouthY = levelY(100) - 26;
+  const constrain = (p: { x: number; y: number }) => {
+    const y = p.y - side / 2;
+    // Đã lọt vào trong bình thì chỉ đi lên xuống được, và không xuyên qua đáy bình hay đĩa cân
+    if (overCylinder(p.x) && y + side > mouthY) return { x: CYL.x, y: Math.min(end.y, y) };
+    const floor = Math.abs(p.x - PAN.x) < 56 + side / 2 ? start.y : CYL.zeroY - side;
+    return { x: p.x, y: Math.min(floor, Math.max(10, y)) };
+  };
+  const dragSample = useSvgDrag(
+    (p) => {
+      window.clearTimeout(autoDrop.current); // người dùng đã tự cầm vật thì không tự thả nữa
+      setHeld(constrain(p));
+    },
+    (p) => {
+      const pos = constrain(p);
+      setHeld(null);
+      if (pos.x === CYL.x) {
+        // Thả trong bình: vật chìm tiếp xuống đáy từ đúng chỗ vừa thả
+        setJump((j) => ({ key: j.key + 1, value: 0.6 + 0.4 * clamp01((pos.y - LIFT_Y) / (end.y - LIFT_Y)) }));
+        setInCylinder(true);
+      } else {
+        // Thả ở ngoài: vật quay về đĩa cân
+        setJump((j) => ({ key: j.key + 1, value: 0.3 * clamp01((start.y - pos.y) / (start.y - LIFT_Y)) }));
+        setInCylinder(false);
+      }
+    }
+  );
+
+  const objX = held ? held.x : start.x + (end.x - start.x) * b;
+  const objY = held ? held.y : start.y + (LIFT_Y - start.y) * a + (end.y - LIFT_Y) * c;
+
+  // Nước dâng dần theo phần vật đã chìm
+  const dipped = clamp01((objY + side - levelY(V1_cm3)) / side);
+  const level = Math.abs(objX - CYL.x) < 1 ? V1_cm3 + (V2_used - V1_cm3) * dipped : V1_cm3;
+  const onPan = held ? held.y >= start.y - 0.5 && Math.abs(held.x - PAN.x) < 56 : u < 0.02;
+  const entering = dipped > 0 && dipped < 1;
+
+  const left = CYL.x - CYL.innerW / 2;
 
   return (
     <div className="experiment-stage-card">
       <div className="stage-header">
-        <h3>Mô Phỏng Thí Nghiệm: Đo Thể Tích & Xác Định Khối Lượng Riêng</h3>
+        <h3>Xác định khối lượng riêng của vật rắn không thấm nước</h3>
         <div className="stage-badges">
-          <span className="badge-tag tag-success">Chất liệu: {material}</span>
-          <span className="badge-tag">D = {D_g_cm3} g/cm³ = {D_kg_m3} kg/m³</span>
-          <span className="badge-tag">V = {V_obj} cm³ (mL)</span>
+          {!valid && <span className="badge-tag tag-warning">V₂ phải lớn hơn V₁</span>}
+          <span className="badge-tag">V = {vn(V_obj, 0)} cm³</span>
+          <span className="badge-tag">D = {vn(D_kg_m3, 0)} kg/m³</span>
+          <span className="badge-tag tag-success">{material}</span>
         </div>
       </div>
 
-      <div className="svg-canvas-wrapper" style={{ height: 420 }}>
+      <div className="svg-canvas-wrapper">
         <svg viewBox="0 0 600 400" className="interactive-svg">
-          {/* CÂN ĐIỆN TỬ ĐO KHỐI LƯỢNG m BÊN TRÁI */}
-          <g transform="translate(100, 160)">
-            {/* Đĩa cân kim loại */}
-            <ellipse cx="60" cy="50" rx="55" ry="12" fill="#94a3b8" stroke="#cbd5e1" strokeWidth="2" />
-            <rect x="52" y="50" width="16" height="30" fill="#64748b" />
-            {/* Thân cân điện tử */}
-            <rect x="0" y="80" width="120" height="90" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-            {/* Màn hình LED LCD hiển thị số gam */}
-            <rect x="20" y="105" width="80" height="35" rx="4" fill="#090d16" stroke="#0ea5e9" strokeWidth="1.5" />
-            <text x="60" y="128" fill="#38bdf8" fontSize="16" fontFamily="JetBrains Mono" fontWeight="bold" textAnchor="middle">
-              {m_g} g
-            </text>
-            <text x="60" y="195" fill="#f8fafc" fontSize="12" fontWeight="bold" textAnchor="middle">
-              Cân điện tử (m = {m_g}g)
-            </text>
+          {/* CÂN ĐIỆN TỬ */}
+          <rect x={PAN.x - 62} y={PAN.y + 24} width="124" height="86" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
+          <rect x={PAN.x - 7} y={PAN.y + 4} width="14" height="20" fill="#64748b" />
+          <rect x={PAN.x - 56} y={PAN.y} width="112" height="6" rx="3" fill="#cbd5e1" />
+          <rect x={PAN.x - 42} y={PAN.y + 46} width="84" height="36" rx="4" fill="#04080f" stroke="#0ea5e9" strokeWidth="1.5" />
+          <text x={PAN.x} y={PAN.y + 71} fill="#38bdf8" fontSize="18" fontWeight="bold" textAnchor="middle" fontFamily="JetBrains Mono, monospace">
+            {onPan ? vn(m_g, 0) : 0} g
+          </text>
+          <text x={PAN.x} y={PAN.y + 128} fill="#f8fafc" fontSize="12" fontWeight="bold" textAnchor="middle">
+            Bước 1: cân khối lượng m
+          </text>
 
-            {/* Vật mẫu đặt trên đĩa cân */}
-            <rect x="35" y="15" width="50" height="35" rx="4" fill="#f59e0b" stroke="#fbbf24" strokeWidth="1.5" />
-            <text x="60" y="37" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">Vật Mẫu</text>
-          </g>
+          {/* BÌNH CHIA ĐỘ */}
+          <ellipse cx={CYL.x} cy={CYL.zeroY + 10} rx="48" ry="9" fill="#334155" stroke="#64748b" strokeWidth="1.5" />
+          <rect x={left} y={levelY(level)} width={CYL.innerW} height={CYL.zeroY - levelY(level)} fill="rgba(56, 189, 248, 0.45)" />
+          <path
+            d={`M ${left} ${levelY(level)} Q ${CYL.x} ${levelY(level) + 4} ${left + CYL.innerW} ${levelY(level)}`}
+            fill="none"
+            stroke="#bae6fd"
+            strokeWidth="2"
+          />
+          {entering && [0, 0.5].map((phase) => {
+            const k = (t * 1.8 + phase) % 1;
+            return (
+              <ellipse
+                key={phase}
+                cx={CYL.x}
+                cy={levelY(level) + 2}
+                rx={side / 2 + k * (CYL.innerW / 2 - side / 2)}
+                ry={1 + k * 2}
+                fill="none"
+                stroke="#e0f2fe"
+                strokeWidth="1.2"
+                opacity={1 - k}
+              />
+            );
+          })}
 
-          {/* MŨI TÊN CHUYỂN TIẾP THẢ VẬT VÀO BÌNH */}
-          <g transform="translate(255, 230)">
-            <path d="M 0 0 Q 30 -30 60 0" fill="none" stroke="#38bdf8" strokeWidth="2" strokeDasharray="4 3" />
-            <polygon points="60,0 52,-6 55,4" fill="#38bdf8" />
-            <text x="30" y="-15" fill="#94a3b8" fontSize="10" textAnchor="middle">Thả chìm</text>
-          </g>
+          {/* Vật mẫu và sợi chỉ buộc vật */}
+          {!onPan && <line x1={objX} y1={objY - 60} x2={objX} y2={objY} stroke="#e2e8f0" strokeWidth="1.2" />}
+          <rect x={objX - side / 2} y={objY} width={side} height={side} rx="3" fill={color.fill} stroke={color.stroke} strokeWidth="1.8" />
 
-          {/* BÌNH CHIA ĐỘ (ỐNG ĐONG) BÊN PHẢI */}
-          <g transform="translate(360, 60)">
-            {/* Đế ống đong */}
-            <ellipse cx="60" cy="300" rx="45" ry="12" fill="#334155" stroke="#64748b" strokeWidth="2" />
-            {/* Thân thủy tinh ống đong */}
-            <rect x="25" y="20" width="70" height="280" rx="4" fill="rgba(255, 255, 255, 0.04)" stroke="#94a3b8" strokeWidth="2.5" />
+          {/* Thành bình và vạch chia (vẽ sau để nằm trên nước và vật) */}
+          <path
+            d={`M ${left - 2} ${levelY(100) - 26} L ${left - 2} ${CYL.zeroY + 2} L ${left + CYL.innerW + 2} ${CYL.zeroY + 2} L ${left + CYL.innerW + 2} ${levelY(100) - 26}`}
+            fill="rgba(255,255,255,0.03)"
+            stroke="#cbd5e1"
+            strokeWidth="2.5"
+          />
+          {Array.from({ length: 21 }, (_, i) => i * 5).map((v) => (
+            <g key={v}>
+              <line x1={left - 2} y1={levelY(v)} x2={left + (v % 10 === 0 ? 14 : 8)} y2={levelY(v)} stroke="#e2e8f0" strokeWidth={v % 10 === 0 ? 1.4 : 0.8} />
+              {v % 20 === 0 && (
+                <text x={left + 17} y={levelY(v) + 3.5} fill="#e2e8f0" fontSize="9" fontFamily="JetBrains Mono, monospace">{v}</text>
+              )}
+            </g>
+          ))}
+          <text x={CYL.x} y={levelY(100) - 32} fill="#94a3b8" fontSize="9" textAnchor="middle">cm³ (mL)</text>
 
-            {/* Cột nước dâng lên mức V2 */}
-            <rect
-              x="27"
-              y={290 - (V2_cm3 / 100) * 240}
-              width="66"
-              height={(V2_cm3 / 100) * 240}
-              fill="rgba(56, 189, 248, 0.5)"
-            />
+          {/* Vùng cầm vật, đặt trên cùng để bấm được cả khi vật ở trong bình */}
+          <rect x={objX - side / 2 - 8} y={objY - 8} width={side + 16} height={side + 16} fill="transparent" {...dragSample} />
 
-            {/* Vạch chia độ 0 -> 100 mL */}
-            {[0, 20, 40, 60, 80, 100].map((v) => {
-              const y = 290 - (v / 100) * 240;
-              return (
-                <g key={v}>
-                  <line x1="25" y1={y} x2="40" y2={y} stroke="#cbd5e1" strokeWidth="1.5" />
-                  <text x="44" y={y + 4} fill="#cbd5e1" fontSize="9" fontFamily="JetBrains Mono">
-                    {v}
-                  </text>
-                </g>
-              );
-            })}
+          {/* Mực nước ban đầu và mực nước hiện tại */}
+          <line x1={left - 2} y1={levelY(V1_cm3)} x2={left + CYL.innerW + 16} y2={levelY(V1_cm3)} stroke="#fbbf24" strokeWidth="1.5" strokeDasharray="4 3" />
+          <text x={left + CYL.innerW + 20} y={levelY(V1_cm3) + 4} fill="#fbbf24" fontSize="11" fontWeight="bold">V₁ = {vn(V1_cm3, 0)}</text>
+          {level > V1_cm3 + 0.5 && (
+            <>
+              <line x1={left + CYL.innerW + 2} y1={levelY(level)} x2={left + CYL.innerW + 16} y2={levelY(level)} stroke="#38bdf8" strokeWidth="1.5" />
+              <text x={left + CYL.innerW + 20} y={levelY(level) + 4} fill="#38bdf8" fontSize="11" fontWeight="bold">
+                {dipped >= 1 ? `V₂ = ${vn(V2_used, 0)}` : vn(level, 0)}
+              </text>
+            </>
+          )}
+          <text x={CYL.x} y={CYL.zeroY + 38} fill="#f8fafc" fontSize="12" fontWeight="bold" textAnchor="middle">
+            Bước 2: đo thể tích V = V₂ − V₁
+          </text>
 
-            {/* Mực nước ban đầu V1 (nét đứt) */}
-            <line
-              x1="27"
-              y1={290 - (V1_cm3 / 100) * 240}
-              x2="93"
-              y2={290 - (V1_cm3 / 100) * 240}
-              stroke="#fbbf24"
-              strokeWidth="2"
-              strokeDasharray="4 2"
-            />
-            <text x="105" y={290 - (V1_cm3 / 100) * 240 + 4} fill="#fbbf24" fontSize="10" fontWeight="bold">
-              V₁ = {V1_cm3} cm³
-            </text>
-
-            {/* Mực nước sau V2 */}
-            <line
-              x1="27"
-              y1={290 - (V2_cm3 / 100) * 240}
-              x2="93"
-              y2={290 - (V2_cm3 / 100) * 240}
-              stroke="#38bdf8"
-              strokeWidth="2"
-            />
-            <text x="105" y={290 - (V2_cm3 / 100) * 240 + 4} fill="#38bdf8" fontSize="10" fontWeight="bold">
-              V₂ = {V2_cm3} cm³
-            </text>
-
-            {/* Vật mẫu chìm dưới đáy ống đong */}
-            <rect x="42" y="240" width="36" height="45" rx="3" fill="#f59e0b" stroke="#fbbf24" strokeWidth="1.5" />
-
-            <text x="60" y="325" fill="#f8fafc" fontSize="12" fontWeight="bold" textAnchor="middle">
-              Bình chia độ (V = V₂ − V₁)
-            </text>
+          {/* PHÉP TÍNH */}
+          <g transform="translate(222, 150)">
+            <rect x="0" y="0" width="150" height="118" rx="8" fill="#0f172a" stroke="#334155" />
+            <text x="12" y="22" fill="#94a3b8" fontSize="10.5">m</text>
+            <text x="138" y="22" fill="#38bdf8" fontSize="11" fontWeight="bold" textAnchor="end">{vn(m_g, 0)} g</text>
+            <text x="12" y="42" fill="#94a3b8" fontSize="10.5">V = V₂ − V₁</text>
+            <text x="138" y="42" fill="#fbbf24" fontSize="11" fontWeight="bold" textAnchor="end">{vn(V_obj, 0)} cm³</text>
+            <line x1="12" y1="52" x2="138" y2="52" stroke="#334155" />
+            <text x="12" y="71" fill="#94a3b8" fontSize="10.5">D = m / V</text>
+            <text x="138" y="71" fill="#34d399" fontSize="11" fontWeight="bold" textAnchor="end">{vn(D_g_cm3)} g/cm³</text>
+            <text x="138" y="89" fill="#34d399" fontSize="11" fontWeight="bold" textAnchor="end">= {vn(D_kg_m3, 0)} kg/m³</text>
+            <text x="75" y="108" fill="#f8fafc" fontSize="10.5" textAnchor="middle">{material}</text>
           </g>
         </svg>
       </div>
 
-      {/* QUICK MATERIAL PRESETS */}
       <div className="quick-orientation-bar">
-        <span>Thử vật mẫu kim loại:</span>
-        <button
-          className={`quick-pill ${Math.abs(D_kg_m3 - 2700) < 300 ? 'active' : ''}`}
-          onClick={() => {
-            onParamChange('m_g', 54);
-            onParamChange('V1_cm3', 50);
-            onParamChange('V2_cm3', 70); // V = 20 -> D = 2.7
-          }}
-        >
-          Khối Nhôm (D ≈ 2700 kg/m³)
+        <button className="quick-pill active" onClick={() => setInCylinder(!inCylinder)}>
+          {inCylinder ? 'Lấy vật ra, đặt lên cân' : 'Thả vật vào bình chia độ'}
         </button>
-        <button
-          className={`quick-pill ${Math.abs(D_kg_m3 - 7800) < 500 ? 'active' : ''}`}
-          onClick={() => {
-            onParamChange('m_g', 156);
-            onParamChange('V1_cm3', 50);
-            onParamChange('V2_cm3', 70); // V = 20 -> D = 7.8
-          }}
-        >
-          Khối Sắt (D ≈ 7800 kg/m³)
-        </button>
-        <button
-          className={`quick-pill ${Math.abs(D_kg_m3 - 8900) < 500 ? 'active' : ''}`}
-          onClick={() => {
-            onParamChange('m_g', 178);
-            onParamChange('V1_cm3', 50);
-            onParamChange('V2_cm3', 70); // V = 20 -> D = 8.9
-          }}
-        >
-          Khối Đồng (D ≈ 8900 kg/m³)
-        </button>
-        <button
-          className={`quick-pill ${Math.abs(D_kg_m3 - 11300) < 600 ? 'active' : ''}`}
-          onClick={() => {
-            onParamChange('m_g', 226);
-            onParamChange('V1_cm3', 50);
-            onParamChange('V2_cm3', 70); // V = 20 -> D = 11.3
-          }}
-        >
-          Khối Chì (D ≈ 11300 kg/m³)
-        </button>
+        <span>Hoặc tự kéo vật thả vào bình. Vật mẫu 20 cm³:</span>
+        {[
+          { name: 'Nhôm', m: 54 },
+          { name: 'Sắt', m: 156 },
+          { name: 'Đồng', m: 178 },
+          { name: 'Chì', m: 226 }
+        ].map((sample) => (
+          <button
+            key={sample.name}
+            className={`quick-pill ${m_g === sample.m && V_obj === 20 ? 'active' : ''}`}
+            onClick={() => {
+              onParamChange('m_g', sample.m);
+              onParamChange('V1_cm3', 50);
+              onParamChange('V2_cm3', 70);
+              setInCylinder(false);
+              window.setTimeout(() => setInCylinder(true), 700);
+            }}
+          >
+            {sample.name}
+          </button>
+        ))}
       </div>
     </div>
   );

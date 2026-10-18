@@ -14,7 +14,7 @@ export const dinhLuatOhmTemplate: ExperimentTemplate<OhmParams> = {
       symbol: 'U',
       unit: 'V',
       min: 1,
-      max: 24,
+      max: 240,
       step: 0.5,
       defaultVal: 12
     },
@@ -23,7 +23,7 @@ export const dinhLuatOhmTemplate: ExperimentTemplate<OhmParams> = {
       symbol: 'R',
       unit: 'Ω',
       min: 1,
-      max: 50,
+      max: 2000,
       step: 1,
       defaultVal: 10
     }
@@ -45,6 +45,6 @@ export const dinhLuatOhmTemplate: ExperimentTemplate<OhmParams> = {
     'P = U \\cdot I = I^2 \\cdot R \\quad (\\text{Công suất tỏa nhiệt})'
   ],
   conditions: 'Cường độ dòng điện chạy qua dây dẫn tỉ lệ thuận với hiệu điện thế đặt vào hai đầu dây và tỉ lệ nghịch với điện trở của dây.',
-  aiHint: 'Các bài toán về định luật Ôm I = U/R; khảo sát sự phụ thuộc của cường độ dòng điện vào hiệu điện thế; số chỉ ampe kế và vôn kế.',
+  aiHint: 'Các bài toán về định luật Ôm I = U/R; khảo sát sự phụ thuộc của cường độ dòng điện vào hiệu điện thế; số chỉ ampe kế và vôn kế. Mẫu chỉ nhận U và R: nếu đề cho U và I rồi hỏi điện trở thì điền R = U / I; nếu đề cho I và R rồi hỏi hiệu điện thế thì điền U = I × R.',
   View: OhmView
 };

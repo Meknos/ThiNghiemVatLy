@@ -1,183 +1,198 @@
-import React, { useRef, useCallback } from 'react';
+import React from 'react';
 import { ViewProps } from '../../core/types';
-import { KhucXaParams } from './model';
+import { useAnimationTime, useSpring, useSvgDrag, vn } from '../../core/anim';
+import { KhucXaParams, MEDIA, computeKhucXa, mediumName } from './model';
 
-export const KhucXaView: React.FC<ViewProps<KhucXaParams>> = ({
-  params,
-  outputs,
-  onParamChange
-}) => {
-  const { i: angleI, medium } = params;
-  const { r: angleR, deviation, mediumName } = outputs;
+const IX = 300;
+const IY = 200;
+const RAY = 172;
+const DEG = Math.PI / 180;
 
-  const svgRef = useRef<SVGSVGElement>(null);
+// Màu môi trường theo chiết suất: lấy màu của mốc gần nhất
+const LOOKS = [
+  { n: 1.33, top: '#0ea5e9', bottom: '#075985' },
+  { n: 1.5, top: '#2dd4bf', bottom: '#115e59' },
+  { n: 1.8, top: '#a5b4fc', bottom: '#3730a3' },
+  { n: 2.42, top: '#c4b5fd', bottom: '#5b21b6' }
+];
+const lookFor = (n: number) => LOOKS.reduce((best, l) => (Math.abs(l.n - n) < Math.abs(best.n - n) ? l : best));
 
-  const ix = 300;
-  const iy = 200;
-  const rayLen = 170;
+/** Hình quạt đánh dấu góc giữa hai phương (rad) tại điểm tới, đi theo cung ngắn hơn. */
+function sector(a1: number, a2: number, r: number) {
+  let diff = a2 - a1;
+  while (diff > Math.PI) diff -= 2 * Math.PI;
+  while (diff < -Math.PI) diff += 2 * Math.PI;
+  const p = (a: number) => `${IX + r * Math.cos(a)} ${IY + r * Math.sin(a)}`;
+  return `M ${IX} ${IY} L ${p(a1)} A ${r} ${r} 0 0 ${diff > 0 ? 1 : 0} ${p(a2)} Z`;
+}
 
-  // Incident ray in air (top-left)
-  const iRad = (angleI * Math.PI) / 180;
-  const srcX = ix - rayLen * Math.sin(iRad);
-  const srcY = iy - rayLen * Math.cos(iRad);
+const ArrowHead: React.FC<{ x: number; y: number; angle: number; color: string; opacity?: number }> = ({ x, y, angle, color, opacity = 1 }) => (
+  <polygon points="-9,-6 7,0 -9,6" fill={color} opacity={opacity} transform={`translate(${x} ${y}) rotate(${angle / DEG})`} />
+);
 
-  // Refracted ray in medium (bottom-right)
-  const rRad = (angleR * Math.PI) / 180;
-  const targetX = ix + rayLen * Math.sin(rRad);
-  const targetY = iy + rayLen * Math.cos(rRad);
+export const KhucXaView: React.FC<ViewProps<KhucXaParams>> = ({ params, onParamChange }) => {
+  const direction = params.direction === 2 ? 2 : 1;
+  const res = computeKhucXa(params);
+  const t = useAnimationTime();
+  const look = { ...lookFor(res.n), name: mediumName(res.n) };
 
-  // Continuation of incident ray (straight line)
-  const straightX = ix + rayLen * Math.sin(iRad);
-  const straightY = iy + rayLen * Math.cos(iRad);
+  const i = useSpring(params.i, { stiffness: 170, damping: 24 });
+  const live = computeKhucXa({ ...params, i }); // tính lại theo góc đang chuyển động để tia khúc xạ đi theo mượt
+  const tir = live.totalReflection;
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.buttons !== 1 || !svgRef.current) return;
-      const rect = svgRef.current.getBoundingClientRect();
-      const mouseX = ((e.clientX - rect.left) / rect.width) * 600;
-      const mouseY = ((e.clientY - rect.top) / rect.height) * 400;
+  // side = -1: nguồn sáng ở trên (không khí); +1: nguồn sáng ở dưới (trong môi trường)
+  const side = direction === 1 ? -1 : 1;
+  const iRad = i * DEG;
+  const rRad = (tir ? 90 : live.r) * DEG;
 
-      if (mouseY >= iy) return; // Chỉ kéo ở nửa trên (không khí)
-      const dx = ix - mouseX;
-      const dy = iy - mouseY;
-      let newI = Math.round((Math.atan2(dx, dy) * 180) / Math.PI);
-      if (newI < 0) newI = 0;
-      if (newI > 85) newI = 85;
-      onParamChange('i', newI);
-    },
-    [onParamChange]
-  );
+  const src = { x: IX - RAY * Math.sin(iRad), y: IY + side * RAY * Math.cos(iRad) };
+  const refl = { x: IX + RAY * Math.sin(iRad), y: IY + side * RAY * Math.cos(iRad) };
+  const refr = { x: IX + RAY * Math.sin(rRad), y: IY - side * RAY * Math.cos(rRad) };
+  const straight = { x: IX + RAY * Math.sin(iRad), y: IY - side * RAY * Math.cos(iRad) };
+
+  const angleTo = (p: { x: number; y: number }) => Math.atan2(p.y - IY, p.x - IX);
+  const normalSrc = side * (Math.PI / 2);
+  const normalFar = -side * (Math.PI / 2);
+
+  const dragSource = useSvgDrag(({ x, y }) => {
+    const along = side * (y - IY);
+    if (along <= 4) return; // nguồn sáng không vượt qua mặt phân cách
+    const next = Math.round(Math.atan2(IX - x, along) / DEG);
+    onParamChange('i', Math.max(0, Math.min(85, next)));
+  });
+
+  const refrOpacity = 0.3 + 0.7 * (1 - live.reflectance);
+  const reflOpacity = Math.min(1, 0.14 + live.reflectance);
+  const speed = (n: number) => 210 / n; // ánh sáng đi chậm hơn trong môi trường chiết suất lớn
+
+  const mid = (p: { x: number; y: number }, f: number) => ({ x: IX + (p.x - IX) * f, y: IY + (p.y - IY) * f });
 
   return (
     <div className="experiment-stage-card">
       <div className="stage-header">
-        <h3>Mô Phỏng Quang Học: Định Luật Khúc Xạ Ánh Sáng</h3>
+        <h3>Khúc xạ ánh sáng tại mặt phân cách</h3>
         <div className="stage-badges">
-          <span className="badge-tag">Góc tới: i = {angleI}°</span>
-          <span className="badge-tag tag-success">Góc khúc xạ: r = {angleR}° (r &lt; i)</span>
-          <span className="badge-tag">Môi trường: {mediumName}</span>
+          <span className="badge-tag">i = {vn(params.i, 0)}°</span>
+          {res.totalReflection ? (
+            <span className="badge-tag tag-warning">Phản xạ toàn phần</span>
+          ) : (
+            <span className="badge-tag tag-success">r = {vn(res.r, 1)}° ({res.r < params.i ? 'r < i' : res.r > params.i ? 'r > i' : 'r = i'})</span>
+          )}
+          {direction === 2 && <span className="badge-tag">i_gh = {vn(res.criticalAngle, 1)}°</span>}
         </div>
       </div>
 
-      <div className="svg-canvas-wrapper" style={{ height: 420 }}>
-        <svg
-          ref={svgRef}
-          viewBox="0 0 600 400"
-          className="interactive-svg"
-          onMouseMove={handleMouseMove}
-          style={{ cursor: 'crosshair' }}
-        >
+      <div className="svg-canvas-wrapper">
+        <svg viewBox="0 0 600 400" className="interactive-svg">
           <defs>
-            <linearGradient id="mediumGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#0284c7" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#0369a1" stopOpacity="0.75" />
+            <linearGradient id="mediumGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={look.top} stopOpacity="0.4" />
+              <stop offset="100%" stopColor={look.bottom} stopOpacity="0.8" />
             </linearGradient>
-
-            <marker id="arrowLaserRed" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
-            </marker>
-            <marker id="arrowLaserCyan" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8" />
-            </marker>
+            <filter id="rayGlow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="2.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
 
-          {/* NỬA DƯỚI: MÔI TRƯỜNG TRONG SUỐT (NƯỚC / THỦY TINH) */}
-          <rect x="50" y={iy} width="500" height="180" fill="url(#mediumGrad)" stroke="#0ea5e9" strokeWidth="1" />
-          <text x="70" y={iy + 35} fill="#e0f2fe" fontSize="13" fontWeight="bold">
-            Môi trường 2: {mediumName}
-          </text>
+          {/* Hai môi trường */}
+          <rect x="40" y={IY} width="520" height="185" fill="url(#mediumGrad)" />
+          <line x1="40" y1={IY} x2="560" y2={IY} stroke="#7dd3fc" strokeWidth="2.5" />
+          <text x="52" y={IY - 150} fill="#cbd5e1" fontSize="12" fontWeight="bold">Không khí (n = 1)</text>
+          <text x="52" y={IY - 134} fill="#94a3b8" fontSize="10">ánh sáng truyền nhanh nhất</text>
+          <text x="52" y={IY + 160} fill="#f0f9ff" fontSize="12" fontWeight="bold">{look.name} (n = {vn(res.n)})</text>
+          <text x="52" y={IY + 175} fill="#e0f2fe" fontSize="10">ánh sáng truyền chậm hơn {vn(res.n)} lần</text>
+          <text x="548" y={IY - 6} fill="#7dd3fc" fontSize="10" fontStyle="italic" textAnchor="end">Mặt phân cách</text>
 
-          {/* NỬA TRÊN: KHÔNG KHÍ */}
-          <text x="70" y={iy - 25} fill="#94a3b8" fontSize="13" fontWeight="bold">
-            Môi trường 1: Không khí (n₁ = 1)
-          </text>
+          {/* Pháp tuyến */}
+          <line x1={IX} y1="18" x2={IX} y2="382" stroke="#fbbf24" strokeWidth="1.6" strokeDasharray="6 4" />
+          <text x={IX + 8} y="28" fill="#fbbf24" fontSize="12" fontWeight="bold">N</text>
+          <text x={IX + 8} y="380" fill="#fbbf24" fontSize="12" fontWeight="bold">N′</text>
 
-          {/* MẶT PHÂN CÁCH HAI MÔI TRƯỜNG */}
-          <line x1="50" y1={iy} x2="550" y2={iy} stroke="#38bdf8" strokeWidth="3" />
-          <text x="500" y={iy - 8} fill="#38bdf8" fontSize="11" fontStyle="italic">
-            Mặt phân cách
-          </text>
+          {/* Góc tới, góc khúc xạ */}
+          {i > 1 && (
+            <>
+              <path d={sector(angleTo(src), normalSrc, 50)} fill="rgba(239,68,68,0.22)" stroke="#ef4444" strokeWidth="1.2" />
+              <text {...mid(src, 0.42)} dx={-6} fill="#f87171" fontSize="13" fontWeight="bold" textAnchor="end">i = {vn(i, 0)}°</text>
+            </>
+          )}
+          {!tir && live.r > 1 && (
+            <>
+              <path d={sector(normalFar, angleTo(refr), 58)} fill="rgba(52,211,153,0.2)" stroke="#34d399" strokeWidth="1.2" />
+              <text {...mid(refr, 0.5)} dx={10} fill="#34d399" fontSize="13" fontWeight="bold">r = {vn(live.r, 1)}°</text>
+            </>
+          )}
 
-          {/* ĐIỂM TỚI I */}
-          <circle cx={ix} cy={iy} r="4" fill="#ffffff" stroke="#0ea5e9" strokeWidth="2" />
-          <text x={ix + 12} y={iy - 8} fill="#ffffff" fontSize="13" fontWeight="bold">I</text>
+          {/* Phương tia tới kéo dài, để thấy tia sáng bị gãy khúc */}
+          {i > 3 && !tir && (
+            <line x1={IX} y1={IY} x2={straight.x} y2={straight.y} stroke="#94a3b8" strokeWidth="1.2" strokeDasharray="4 4" />
+          )}
 
-          {/* ĐƯỜNG PHÁP TUYẾN NN' */}
-          <line x1={ix} y1="30" x2={ix} y2="370" stroke="#fbbf24" strokeWidth="2" strokeDasharray="6 4" />
-          <text x={ix - 12} y="45" fill="#fbbf24" fontSize="12" fontWeight="bold">N</text>
-          <text x={ix - 12} y="365" fill="#fbbf24" fontSize="12" fontWeight="bold">N'</text>
-
-          {/* TIA TỚI SI TRONG KHÔNG KHÍ (MÀU ĐỎ) */}
+          {/* Tia tới */}
+          <line x1={src.x} y1={src.y} x2={IX} y2={IY} stroke="#ef4444" strokeWidth="3.2" filter="url(#rayGlow)" />
           <line
-            x1={srcX}
-            y1={srcY}
-            x2={ix}
-            y2={iy}
-            stroke="#ef4444"
-            strokeWidth="3.5"
-            markerMid="url(#arrowLaserRed)"
+            x1={src.x} y1={src.y} x2={IX} y2={IY}
+            stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round"
+            strokeDasharray="5 30" strokeDashoffset={-t * speed(live.n1)}
           />
-          {/* Nguồn phát laser S kéo được */}
-          <g transform={`translate(${srcX}, ${srcY})`} style={{ cursor: 'grab' }}>
-            <circle cx="0" cy="0" r="12" fill="rgba(239, 68, 68, 0.3)" stroke="#ef4444" strokeWidth="2" />
-            <circle cx="0" cy="0" r="6" fill="#ef4444" />
-            <text x="-25" y="-14" fill="#ef4444" fontSize="11" fontWeight="bold">S (Kéo nguồn)</text>
+          <ArrowHead {...mid(src, 0.5)} angle={angleTo(src) + Math.PI} color="#ef4444" />
+
+          {/* Tia phản xạ: mờ khi chiếu gần vuông góc, sáng hẳn khi phản xạ toàn phần */}
+          <line x1={IX} y1={IY} x2={refl.x} y2={refl.y} stroke="#f472b6" strokeWidth={tir ? 3.2 : 2} opacity={reflOpacity} filter={tir ? 'url(#rayGlow)' : undefined} />
+          <line
+            x1={IX} y1={IY} x2={refl.x} y2={refl.y}
+            stroke="#ffffff" strokeWidth="2" strokeLinecap="round" opacity={reflOpacity}
+            strokeDasharray="5 30" strokeDashoffset={-t * speed(live.n1)}
+          />
+          <ArrowHead {...mid(refl, 0.6)} angle={angleTo(refl)} color="#f472b6" opacity={reflOpacity} />
+          <text x={refl.x} y={refl.y + (side < 0 ? -8 : 16)} fill="#f472b6" fontSize="11" textAnchor="middle" opacity={Math.max(0.6, reflOpacity)}>
+            {tir ? 'Phản xạ toàn phần' : 'Tia phản xạ'}
+          </text>
+
+          {/* Tia khúc xạ */}
+          {!tir && (
+            <>
+              <line x1={IX} y1={IY} x2={refr.x} y2={refr.y} stroke="#34d399" strokeWidth="3.2" opacity={refrOpacity} filter="url(#rayGlow)" />
+              <line
+                x1={IX} y1={IY} x2={refr.x} y2={refr.y}
+                stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" opacity={refrOpacity}
+                strokeDasharray="5 30" strokeDashoffset={-t * speed(live.n2)}
+              />
+              <ArrowHead {...mid(refr, 0.62)} angle={angleTo(refr)} color="#34d399" opacity={refrOpacity} />
+              <text x={refr.x} y={refr.y + (side < 0 ? 16 : -8)} fill="#34d399" fontSize="11" fontWeight="bold" textAnchor="middle">Tia khúc xạ</text>
+            </>
+          )}
+
+          <circle cx={IX} cy={IY} r="4" fill="#ffffff" stroke="#0ea5e9" strokeWidth="2" />
+          <text x={IX - 14} y={IY - 8} fill="#ffffff" fontSize="13" fontWeight="bold">I</text>
+
+          {/* Đèn laze S */}
+          <g transform={`translate(${src.x} ${src.y}) rotate(${angleTo(src) / DEG})`}>
+            <rect x="-2" y="-9" width="34" height="18" rx="4" fill="#1e293b" stroke="#ef4444" strokeWidth="2" />
+            <circle cx="-2" cy="0" r="3.5" fill="#ef4444" />
           </g>
-
-          {/* TIA KHÚC XẠ IK BỊ BẺ CONG (MÀU CYAN) */}
-          <line
-            x1={ix}
-            y1={iy}
-            x2={targetX}
-            y2={targetY}
-            stroke="#38bdf8"
-            strokeWidth="3.5"
-            markerEnd="url(#arrowLaserCyan)"
-          />
-          <text x={targetX + 10} y={targetY + 4} fill="#38bdf8" fontSize="12" fontWeight="bold">K (Tia khúc xạ)</text>
-
-          {/* PHƯƠNG KÉO DÀI CỦA TIA TỚI ĐỂ THẤY GÓC LỆCH (NÉT ĐỨT) */}
-          {angleI > 5 && (
-            <line
-              x1={ix}
-              y1={iy}
-              x2={straightX}
-              y2={straightY}
-              stroke="#94a3b8"
-              strokeWidth="1.5"
-              strokeDasharray="4 4"
-            />
-          )}
-
-          {/* NHÃN GÓC TỚI i & GÓC KHÚC XẠ r */}
-          {angleI > 5 && (
-            <text x={ix - 35} y={iy - 35} fill="#ef4444" fontSize="13" fontWeight="bold">
-              i = {angleI}°
-            </text>
-          )}
-          {angleR > 3 && (
-            <text x={ix + 18} y={iy + 45} fill="#38bdf8" fontSize="13" fontWeight="bold">
-              r = {angleR}°
-            </text>
-          )}
+          <circle cx={src.x} cy={src.y} r="24" fill="transparent" {...dragSource} />
         </svg>
       </div>
 
-      {/* QUICK PRESETS */}
       <div className="quick-orientation-bar">
-        <span>Chọn môi trường khúc xạ:</span>
-        <button className={`quick-pill ${medium === 1 ? 'active' : ''}`} onClick={() => onParamChange('medium', 1)}>
-          Nước (n = 1.33)
+        <span>Chiều truyền:</span>
+        <button className={`quick-pill ${direction === 1 ? 'active' : ''}`} onClick={() => onParamChange('direction', 1)}>
+          Không khí → {look.name.toLowerCase()}
         </button>
-        <button className={`quick-pill ${medium === 2 ? 'active' : ''}`} onClick={() => onParamChange('medium', 2)}>
-          Thủy tinh (n = 1.50) — Bẻ cong nhiều hơn
+        <button className={`quick-pill ${direction === 2 ? 'active' : ''}`} onClick={() => onParamChange('direction', 2)}>
+          {look.name} → không khí
         </button>
-        <button className={`quick-pill ${medium === 3 ? 'active' : ''}`} onClick={() => onParamChange('medium', 3)}>
-          Kim cương (n = 2.42) — Bẻ cong tối đa
-        </button>
-        <button className="quick-pill" onClick={() => onParamChange('i', 60)}>
-          Góc tới lớn (60°)
-        </button>
+        <span>Môi trường:</span>
+        {MEDIA.map((m) => (
+          <button key={m.name} className={`quick-pill ${Math.abs(params.n - m.n) < 0.005 ? 'active' : ''}`} onClick={() => onParamChange('n', m.n)}>
+            {m.name}
+          </button>
+        ))}
+        <span className="stage-note">Kéo đèn laze để đổi góc tới.</span>
       </div>
     </div>
   );

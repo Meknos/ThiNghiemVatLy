@@ -1,27 +1,20 @@
-import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
-import { getAiProvider } from './provider';
 
-const app = new Hono();
+// Nạp khóa API từ tệp .env (nếu có) trước khi tạo nhà cung cấp AI
+try {
+  process.loadEnvFile?.('.env');
+} catch {
+  // không có tệp .env: dùng biến môi trường sẵn có
+}
 
-app.post('/api/tao-thi-nghiem', async (c) => {
-  try {
-    const body = await c.req.json();
-    const prompt = body.prompt;
+const { getAiProvider } = await import('./provider');
+const { createApp, rateLimitFromEnv } = await import('./app');
 
-    if (!prompt || typeof prompt !== 'string') {
-      return c.json({ error: 'Thiếu trường prompt hợp lệ' }, 400);
-    }
-
-    const provider = getAiProvider();
-    const result = await provider.extractExperiment(prompt);
-
-    return c.json(result);
-  } catch (err: any) {
-    return c.json({ error: 'Lỗi xử lý AI: ' + err.message }, 500);
-  }
+const app = createApp({
+  getProvider: () => getAiProvider(),
+  rateLimit: () => rateLimitFromEnv(process.env.AIPLAB_RATE_LIMIT)
 });
 
-const PORT = 3001;
-console.log(`AIPLab AI Backend server running at http://localhost:${PORT}`);
+const PORT = Number(process.env.PORT) || 3001;
 serve({ fetch: app.fetch, port: PORT });
+console.log(`AIPLab AI backend: http://localhost:${PORT} — chế độ: ${getAiProvider().description}`);

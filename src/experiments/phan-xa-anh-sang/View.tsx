@@ -1,237 +1,172 @@
-import React, { useRef, useCallback } from 'react';
+import React from 'react';
 import { ViewProps } from '../../core/types';
-import { PhanXaParams } from './model';
+import { useAnimationTime, useSpring, useSvgDrag, vn } from '../../core/anim';
+import { PhanXaParams, computePhanXa } from './model';
 
-export const PhanXaView: React.FC<ViewProps<PhanXaParams>> = ({ params, outputs, onParamChange }) => {
-  const { i: angleI, mirrorAngle } = params;
-  const { i_prime, angleBetweenRays, angleWithMirror } = outputs;
+const IX = 300;
+const IY = 290;
+const RAY = 200;
+const DEG = Math.PI / 180;
 
-  const svgRef = useRef<SVGSVGElement>(null);
+const polar = (angle: number, r: number) => ({ x: IX + r * Math.cos(angle), y: IY + r * Math.sin(angle) });
 
-  // Center coordinates of point of incidence I
-  const ix = 300;
-  const iy = 260;
-  const rayLength = 200;
+/** Hình quạt đánh dấu góc giữa hai phương a1 và a2 (rad), đỉnh tại điểm tới I. */
+function sector(a1: number, a2: number, r: number) {
+  const p1 = polar(a1, r), p2 = polar(a2, r);
+  return `M ${IX} ${IY} L ${p1.x} ${p1.y} A ${r} ${r} 0 0 ${a2 > a1 ? 1 : 0} ${p2.x} ${p2.y} Z`;
+}
 
-  // Normal line is perpendicular to mirror
-  // If mirror is horizontal (0 deg), normal is vertical upwards (angle = -90 deg or 270 deg)
-  const mirrorRad = (mirrorAngle * Math.PI) / 180;
-  const normalAngleRad = mirrorRad - Math.PI / 2;
+const ArrowHead: React.FC<{ x: number; y: number; angle: number; color: string }> = ({ x, y, angle, color }) => (
+  <polygon points="-9,-6 7,0 -9,6" fill={color} transform={`translate(${x} ${y}) rotate(${angle / DEG})`} />
+);
 
-  // Incident ray comes from top-left (relative to normal)
-  // angleI is measured relative to normal
-  const incidentRad = normalAngleRad - (angleI * Math.PI) / 180;
-  const sourceX = ix + rayLength * Math.cos(incidentRad);
-  const sourceY = iy + rayLength * Math.sin(incidentRad);
+export const PhanXaView: React.FC<ViewProps<PhanXaParams>> = ({ params, onParamChange }) => {
+  const { i_prime, angleBetweenRays, angleWithMirror } = computePhanXa(params);
+  const t = useAnimationTime();
 
-  // Reflected ray goes to top-right
-  const reflectedRad = normalAngleRad + (i_prime * Math.PI) / 180;
-  const targetX = ix + rayLength * Math.cos(reflectedRad);
-  const targetY = iy + rayLength * Math.sin(reflectedRad);
+  // Tia sáng và gương xoay mượt tới vị trí mới
+  const i = useSpring(params.i, { stiffness: 170, damping: 24 });
+  const mirrorAngle = useSpring(params.mirrorAngle, { stiffness: 170, damping: 24 });
 
-  // Normal top point
-  const normalTopX = ix + (rayLength + 20) * Math.cos(normalAngleRad);
-  const normalTopY = iy + (rayLength + 20) * Math.sin(normalAngleRad);
+  const normal = mirrorAngle * DEG - Math.PI / 2; // pháp tuyến vuông góc với mặt gương
+  const incident = normal - i * DEG;              // phương từ I về nguồn S
+  const reflected = normal + i * DEG;             // i' = i, ở bên kia pháp tuyến
 
-  // Mouse drag handler for the laser emitter handle
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.buttons !== 1 || !svgRef.current) return;
-      const rect = svgRef.current.getBoundingClientRect();
-      const mouseX = ((e.clientX - rect.left) / rect.width) * 600;
-      const mouseY = ((e.clientY - rect.top) / rect.height) * 400;
+  const S = polar(incident, RAY);
+  const R = polar(reflected, RAY);
+  const N = polar(normal, RAY + 18);
 
-      // Calculate angle relative to incidence point I
-      const dx = mouseX - ix;
-      const dy = mouseY - iy;
-      const mouseAngleRad = Math.atan2(dy, dx);
+  const dragSource = useSvgDrag(({ x, y }) => {
+    let diff = (Math.atan2(y - IY, x - IX) - (params.mirrorAngle * DEG - Math.PI / 2)) / DEG;
+    while (diff < -180) diff += 360;
+    while (diff > 180) diff -= 360;
+    onParamChange('i', Math.min(89, Math.round(Math.abs(diff))));
+  });
+  const dragMirror = useSvgDrag(({ x, y }) => {
+    const a = Math.atan2(y - IY, x - IX) / DEG;
+    onParamChange('mirrorAngle', Math.max(-45, Math.min(45, Math.round(a))));
+  });
 
-      // Angle from normal
-      let diffDeg = ((mouseAngleRad - normalAngleRad) * 180) / Math.PI;
-      // Normalise to [-180, 180]
-      while (diffDeg < -180) diffDeg += 360;
-      while (diffDeg > 180) diffDeg -= 360;
-
-      let newI = Math.abs(diffDeg);
-      if (newI > 89) newI = 89;
-      onParamChange('i', Math.round(newI));
-    },
-    [normalAngleRad, onParamChange]
-  );
+  const mirrorEnd = polar(mirrorAngle * DEG, 215);
+  const labelI = polar(normal - (i / 2) * DEG, 78);
+  const labelR = polar(normal + (i / 2) * DEG, 78);
 
   return (
     <div className="experiment-stage-card">
       <div className="stage-header">
-        <h3>Mô Phỏng Quang Học: Định Luật Phản Xạ Ánh Sáng</h3>
+        <h3>Định luật phản xạ ánh sáng</h3>
         <div className="stage-badges">
-          <span className="badge-tag">Tia Laser & Gương Phẳng</span>
-          <span className="badge-tag">Góc tới: {angleI}° | Góc phản xạ: {i_prime}°</span>
+          <span className="badge-tag">Góc tới i = {vn(params.i, 0)}°</span>
+          <span className="badge-tag tag-success">Góc phản xạ i′ = {vn(i_prime, 0)}°</span>
+          <span className="badge-tag">Tia tới hợp với gương {vn(angleWithMirror, 0)}°</span>
         </div>
       </div>
 
-      <div className="svg-canvas-wrapper" style={{ height: 420 }}>
-        <svg
-          ref={svgRef}
-          viewBox="0 0 600 400"
-          className="interactive-svg"
-          onMouseMove={handleMouseMove}
-          style={{ cursor: 'crosshair' }}
-        >
+      <div className="svg-canvas-wrapper">
+        <svg viewBox="0 0 600 400" className="interactive-svg">
           <defs>
-            {/* Glow filters for laser rays */}
-            <filter id="laserGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3.5" result="blur" />
+            <filter id="laserGlow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
-
-            {/* Mirror hatch pattern */}
             <pattern id="mirrorHatch" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
-              <line x1="0" y1="0" x2="0" y2="8" stroke="#475569" strokeWidth="1.5" />
+              <line x1="0" y1="0" x2="0" y2="8" stroke="#64748b" strokeWidth="1.5" />
             </pattern>
-
-            <marker id="rayArrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8" />
-            </marker>
-
-            <marker id="laserHead" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
-            </marker>
           </defs>
 
-          {/* Nửa vòng tròn thước chia độ (Protractor) */}
-          <g opacity="0.35">
-            <path
-              d={`M ${ix - 170} ${iy} A 170 170 0 0 1 ${ix + 170} ${iy}`}
-              fill="none"
-              stroke="#64748b"
-              strokeWidth="1.5"
-            />
-            {/* Vạch chia độ */}
-            {[0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180].map((deg) => {
-              const rad = ((-deg) * Math.PI) / 180;
-              const r1 = 160;
-              const r2 = 170;
-              const x1 = ix + r1 * Math.cos(rad);
-              const y1 = iy + r1 * Math.sin(rad);
-              const x2 = ix + r2 * Math.cos(rad);
-              const y2 = iy + r2 * Math.sin(rad);
+          {/* Gương phẳng và thước đo góc, cùng xoay quanh điểm tới I */}
+          <g transform={`rotate(${mirrorAngle} ${IX} ${IY})`}>
+            <path d={`M ${IX - 170} ${IY} A 170 170 0 0 1 ${IX + 170} ${IY}`} fill="rgba(148,163,184,0.05)" stroke="#475569" strokeWidth="1.2" />
+            {Array.from({ length: 19 }, (_, k) => k * 10).map((deg) => {
+              const a = -deg * DEG;
+              const long = deg % 30 === 0;
+              const p1 = polar(a, long ? 156 : 162), p2 = polar(a, 170);
+              return <line key={deg} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#94a3b8" strokeWidth={long ? 1.4 : 0.8} />;
+            })}
+            {[0, 30, 60, 90, 120, 150, 180].map((deg) => {
+              const p = polar(-deg * DEG, 144);
               return (
-                <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#94a3b8" strokeWidth="1" />
+                <text key={deg} x={p.x} y={p.y + 3} fill="#94a3b8" fontSize="9" textAnchor="middle">
+                  {Math.abs(90 - deg)}
+                </text>
               );
             })}
+            <rect x={IX - 215} y={IY} width="430" height="14" fill="url(#mirrorHatch)" />
+            <line x1={IX - 215} y1={IY} x2={IX + 215} y2={IY} stroke="#7dd3fc" strokeWidth="4" />
+            <text x={IX - 205} y={IY + 30} fill="#94a3b8" fontSize="11" fontStyle="italic">Gương phẳng</text>
           </g>
 
-          {/* GƯƠNG PHẲNG */}
-          <g transform={`rotate(${mirrorAngle} ${ix} ${iy})`}>
-            {/* Mặt phản xạ */}
-            <line x1={ix - 220} y1={iy} x2={ix + 220} y2={iy} stroke="#38bdf8" strokeWidth="4" />
-            {/* Lớp tráng bạc / gạch chéo đáy gương */}
-            <rect x={ix - 220} y={iy} width="440" height="16" fill="url(#mirrorHatch)" />
-            <text x={ix + 140} y={iy + 30} fill="#94a3b8" fontSize="12" fontStyle="italic">
-              Gương phẳng G
-            </text>
-          </g>
-
-          {/* ĐIỂM TỚI I */}
-          <circle cx={ix} cy={iy} r="4" fill="#ffffff" stroke="#38bdf8" strokeWidth="2" />
-          <text x={ix} y={iy + 20} fill="#f8fafc" fontSize="14" fontWeight="bold" textAnchor="middle">
-            I
-          </text>
-
-          {/* PHÁP TUYẾN NN' */}
-          <line
-            x1={ix}
-            y1={iy}
-            x2={normalTopX}
-            y2={normalTopY}
-            stroke="#fbbf24"
-            strokeWidth="2"
-            strokeDasharray="6 4"
-          />
-          <text x={normalTopX} y={normalTopY - 8} fill="#fbbf24" fontSize="13" fontWeight="bold" textAnchor="middle">
-            N (Pháp tuyến)
-          </text>
-
-          {/* TIA TỚI SI (Màu đỏ Laser) */}
-          <line
-            x1={sourceX}
-            y1={sourceY}
-            x2={ix}
-            y2={iy}
-            stroke="#ef4444"
-            strokeWidth="3.5"
-            filter="url(#laserGlow)"
-            markerMid="url(#laserHead)"
-          />
-
-          {/* Nguồn phát Laser S (có thể bấm kéo) */}
-          <g
-            style={{ cursor: 'grab' }}
-            transform={`translate(${sourceX}, ${sourceY})`}
-          >
-            <circle cx="0" cy="0" r="14" fill="rgba(239, 68, 68, 0.25)" stroke="#ef4444" strokeWidth="2" />
-            <circle cx="0" cy="0" r="7" fill="#ef4444" />
-            <text x="-25" y="-12" fill="#ef4444" fontSize="12" fontWeight="bold">
-              S (Nguồn)
-            </text>
-          </g>
-
-          {/* TIA PHẢN XẠ IR (Màu xanh Cyan phản xạ) */}
-          <line
-            x1={ix}
-            y1={iy}
-            x2={targetX}
-            y2={targetY}
-            stroke="#38bdf8"
-            strokeWidth="3.5"
-            filter="url(#laserGlow)"
-            markerEnd="url(#rayArrow)"
-          />
-          <text x={targetX + 10} y={targetY - 10} fill="#38bdf8" fontSize="12" fontWeight="bold">
-            R (Tia phản xạ)
-          </text>
-
-          {/* CUNG ĐO GÓC TỚI i */}
-          {angleI > 3 && (
-            <g>
-              <text x={(sourceX + ix + normalTopX) / 3} y={(sourceY + iy + normalTopY) / 3} fill="#ef4444" fontSize="13" fontWeight="bold">
-                i = {angleI}°
-              </text>
-            </g>
+          {/* Góc tới và góc phản xạ */}
+          {i > 1 && (
+            <>
+              <path d={sector(incident, normal, 52)} fill="rgba(239,68,68,0.22)" stroke="#ef4444" strokeWidth="1.2" />
+              <path d={sector(normal, reflected, 62)} fill="rgba(56,189,248,0.2)" stroke="#38bdf8" strokeWidth="1.2" />
+              <text x={labelI.x} y={labelI.y + 4} fill="#f87171" fontSize="13" fontWeight="bold" textAnchor="middle">i = {vn(i, 0)}°</text>
+              <text x={labelR.x} y={labelR.y + 4} fill="#38bdf8" fontSize="13" fontWeight="bold" textAnchor="middle">i′ = {vn(i, 0)}°</text>
+            </>
           )}
 
-          {/* CUNG ĐO GÓC PHẢN XẠ i' */}
-          {i_prime > 3 && (
-            <g>
-              <text x={(targetX + ix + normalTopX) / 3} y={(targetY + iy + normalTopY) / 3} fill="#38bdf8" fontSize="13" fontWeight="bold">
-                i' = {i_prime}°
-              </text>
-            </g>
-          )}
+          {/* Pháp tuyến IN */}
+          <line x1={IX} y1={IY} x2={N.x} y2={N.y} stroke="#fbbf24" strokeWidth="1.8" strokeDasharray="6 4" />
+          <text x={N.x} y={N.y - 6} fill="#fbbf24" fontSize="12" fontWeight="bold" textAnchor="middle">N (pháp tuyến)</text>
+
+          {/* Tia tới SI và tia phản xạ IR */}
+          <g filter="url(#laserGlow)">
+            <line x1={S.x} y1={S.y} x2={IX} y2={IY} stroke="#ef4444" strokeWidth="3" />
+            <line x1={IX} y1={IY} x2={R.x} y2={R.y} stroke="#38bdf8" strokeWidth="3" />
+          </g>
+          {/* Ánh sáng truyền đi: từ S tới gương rồi bật ra */}
+          <polyline
+            points={`${S.x},${S.y} ${IX},${IY} ${R.x},${R.y}`}
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeDasharray="5 34"
+            strokeDashoffset={-t * 190}
+            opacity="0.9"
+          />
+          <ArrowHead {...polar(incident, RAY * 0.55)} angle={incident + Math.PI} color="#ef4444" />
+          <ArrowHead {...polar(reflected, RAY * 0.6)} angle={reflected} color="#38bdf8" />
+          <text x={R.x + 8 * Math.cos(reflected)} y={R.y + 8 * Math.sin(reflected) - 6} fill="#38bdf8" fontSize="13" fontWeight="bold" textAnchor="middle">R</text>
+
+          {/* Điểm tới */}
+          <circle cx={IX} cy={IY} r="4" fill="#ffffff" stroke="#38bdf8" strokeWidth="2" />
+          <text x={IX + 12} y={IY + 32} fill="#f8fafc" fontSize="13" fontWeight="bold">I</text>
+
+          {/* Đèn laze S, kéo để đổi góc tới */}
+          <g transform={`translate(${S.x} ${S.y}) rotate(${incident / DEG})`}>
+            <rect x="-2" y="-9" width="36" height="18" rx="4" fill="#1e293b" stroke="#ef4444" strokeWidth="2" />
+            <circle cx="-2" cy="0" r="3.5" fill="#ef4444" />
+          </g>
+          <text x={S.x + 26 * Math.cos(incident)} y={S.y + 26 * Math.sin(incident) - 16} fill="#f87171" fontSize="13" fontWeight="bold" textAnchor="middle">S</text>
+          <circle cx={S.x} cy={S.y} r="24" fill="transparent" {...dragSource} />
+
+          {/* Tay xoay gương */}
+          <circle cx={mirrorEnd.x} cy={mirrorEnd.y} r="7" fill="#7dd3fc" stroke="#ffffff" strokeWidth="2" pointerEvents="none" />
+          <circle cx={mirrorEnd.x} cy={mirrorEnd.y} r="20" fill="transparent" {...dragMirror} />
+
+          <text x="16" y="24" fill="#94a3b8" fontSize="11">Góc giữa tia tới và tia phản xạ: {vn(angleBetweenRays, 0)}°</text>
         </svg>
       </div>
 
-      {/* Quick select presets */}
       <div className="quick-orientation-bar">
-        <span>Chọn nhanh góc tới i:</span>
-        <button className={`quick-pill ${angleI === 0 ? 'active' : ''}`} onClick={() => onParamChange('i', 0)}>
-          0° (Vuông góc)
-        </button>
-        <button className={`quick-pill ${angleI === 30 ? 'active' : ''}`} onClick={() => onParamChange('i', 30)}>
-          30°
-        </button>
-        <button className={`quick-pill ${angleI === 45 ? 'active' : ''}`} onClick={() => onParamChange('i', 45)}>
-          45° (Góc vuông tia)
-        </button>
-        <button className={`quick-pill ${angleI === 60 ? 'active' : ''}`} onClick={() => onParamChange('i', 60)}>
-          60°
-        </button>
-        <span style={{ marginLeft: 'auto', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-          💡 Bạn có thể bấm và kéo nguồn sáng trực tiếp trên hình!
-        </span>
+        <span>Góc tới:</span>
+        {[0, 30, 45, 60].map((deg) => (
+          <button key={deg} className={`quick-pill ${params.i === deg ? 'active' : ''}`} onClick={() => onParamChange('i', deg)}>
+            {deg}°
+          </button>
+        ))}
+        <span>Gương nghiêng:</span>
+        {[-20, 0, 20].map((deg) => (
+          <button key={deg} className={`quick-pill ${params.mirrorAngle === deg ? 'active' : ''}`} onClick={() => onParamChange('mirrorAngle', deg)}>
+            {deg}°
+          </button>
+        ))}
+        <span className="stage-note">Kéo đèn S để đổi góc tới, kéo chấm ở đầu gương để xoay gương.</span>
       </div>
     </div>
   );

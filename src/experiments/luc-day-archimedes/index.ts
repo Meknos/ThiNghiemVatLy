@@ -10,7 +10,7 @@ export const archimedesTemplate: ExperimentTemplate<ArchimedesParams> = {
   grade: 8,
   params: {
     V_cm3: {
-      label: 'Thể tích chìm của vật',
+      label: 'Thể tích của vật',
       symbol: 'V',
       unit: 'cm³',
       min: 50,
@@ -35,27 +35,38 @@ export const archimedesTemplate: ExperimentTemplate<ArchimedesParams> = {
       max: 5,
       step: 0.1,
       defaultVal: 0.8
+    },
+    immersed: {
+      label: 'Phần thể tích vật nhúng vào chất lỏng',
+      symbol: '%V',
+      unit: '%',
+      min: 0,
+      max: 100,
+      step: 5,
+      defaultVal: 100
     }
   },
   outputs: [
     { label: 'Lực đẩy Ác-si-mét', symbol: 'F_A', unit: 'N' },
     { label: 'Trọng lượng vật', symbol: 'P', unit: 'N' },
-    { label: 'Số chỉ lực kế', symbol: "P'", unit: 'N' }
+    { label: 'Số chỉ lực kế', symbol: "P'", unit: 'N' },
+    { label: 'Thể tích phần chìm', symbol: 'V_c', unit: 'cm³' }
   ],
   compute: (p) => {
     const res = computeArchimedes(p);
     return {
       'F_A': res.F_A,
       'P': res.P,
-      "P'": res.P_prime
+      "P'": res.P_prime,
+      'V_c': res.V_chim
     };
   },
   formulas: [
     'F_A = d \\cdot V',
     "P' = P - F_A \\quad (\\text{Lực kế khi nhúng trong chất lỏng})",
-    'F_A > P \\implies \\text{Vật nổi}; \\quad F_A = P \\implies \\text{Lơ lửng}; \\quad F_A < P \\implies \\text{Vật chìm}'
+    '\\text{Khi vật chìm hoàn toàn: } F_A > P \\Rightarrow \\text{nổi lên}; \\quad F_A = P \\Rightarrow \\text{lơ lửng}; \\quad F_A < P \\Rightarrow \\text{chìm xuống}'
   ],
-  conditions: 'V là thể tích của phần chất lỏng bị vật chiếm chỗ (tính bằng m³). d là trọng lượng riêng của chất lỏng (N/m³).',
+  conditions: 'V trong công thức là thể tích phần chất lỏng bị vật chiếm chỗ, tức phần vật chìm trong chất lỏng (tính bằng m³), không phải lúc nào cũng là cả thể tích vật. d là trọng lượng riêng của chất lỏng (N/m³). Vật nổi khi trọng lượng nhỏ hơn lực đẩy lúc chìm hoàn toàn.',
   aiHint: 'Các bài toán nhúng vật vào trong nước, dầu; tính lực đẩy Ác-si-mét F_A, độ giảm trọng lượng trên lực kế, hoặc xét vật nổi/lơ lửng/chìm.',
   View: ArchimedesView
 };

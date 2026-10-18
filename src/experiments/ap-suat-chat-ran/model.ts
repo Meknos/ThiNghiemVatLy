@@ -6,31 +6,27 @@ export interface ApSuatParams {
 }
 
 export interface ApSuatOutputs {
-  F: number;   // Áp lực tác dụng vuông góc lên mặt bị ép (N)
-  p: number;   // Áp suất (N/m² hoặc Pa)
-  depth: number; // Độ lún minh họa trên bề mặt mút/cát (mm)
+  F: number;         // Áp lực tác dụng vuông góc lên mặt bị ép (N)
+  p: number;         // Áp suất (N/m² hay Pa)
+  sinkRatio: number; // Mức lún minh họa trên đệm mút, từ 0 đến 1 (không phải số đo)
 }
 
 export function computeApSuat(params: ApSuatParams): ApSuatOutputs {
   const m = Math.max(0.01, params.m);
   const S_cm2 = Math.max(0.1, params.S);
 
-  // F = 10 * m theo SGK THCS
+  // F = P = 10·m theo SGK THCS
   const F = Units.massToWeight(m, 10);
 
-  // S (m²) = S (cm²) / 10,000
+  // S (m²) = S (cm²) / 10 000
   const S_m2 = Units.cm2ToM2(S_cm2);
 
-  // p = F / S (Pa)
+  // p = F / S
   const p = F / S_m2;
 
-  // Độ lún giả lập trên đệm mút xốp: tỉ lệ với áp suất
-  // 1000 Pa ~ 5 mm lún
-  const depth = Math.min(60, (p / 1000) * 5);
+  // Đệm mút lún nhiều hơn khi áp suất lớn hơn, nhưng không lún mãi được.
+  // Hàm bão hòa này chỉ để vẽ hình: tăng đều theo p và tiến dần tới 1.
+  const sinkRatio = p / (p + 20000);
 
-  return {
-    F,
-    p,
-    depth
-  };
+  return { F, p, sinkRatio };
 }

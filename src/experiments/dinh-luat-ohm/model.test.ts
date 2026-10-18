@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeOhm } from './model';
+import { ammeterRange, computeOhm } from './model';
 
 describe('Thí nghiệm Định luật Ôm', () => {
   it('tính chính xác dòng điện I = U / R: U = 12V, R = 6Ω -> I = 2A, P = 24W', () => {
@@ -15,5 +15,13 @@ describe('Thí nghiệm Định luật Ôm', () => {
 
     const res3 = computeOhm({ U: 12, R: 20 }); // 0.6A
     expect(res3.I).toBe(res2.I / 2);
+  });
+});
+
+describe('Chọn thang đo ampe kế', () => {
+  it('chọn thang nhỏ nhất còn đo được dòng điện', () => {
+    expect(ammeterRange(0.4)).toBe(0.6);
+    expect(ammeterRange(1.2)).toBe(3);
+    expect(ammeterRange(12)).toBe(30);
   });
 });

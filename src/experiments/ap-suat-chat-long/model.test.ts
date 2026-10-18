@@ -15,3 +15,21 @@ describe('Thí nghiệm Áp suất chất lỏng', () => {
     expect(res2.p).toBe(res1.p * 2);
   });
 });
+
+describe('Tia nước phun ra từ thành bình', () => {
+  it('lỗ càng sâu thì tia nước càng đi xa (bình đặt trên giá cao)', () => {
+    const ranges = [10, 20, 40, 60, 80].map((h) => computeApSuatChatLong({ h_cm: h, d_liquid: 10000 }).jetRange);
+    for (let i = 1; i < ranges.length; i++) expect(ranges[i]).toBeGreaterThan(ranges[i - 1]);
+  });
+
+  it('tầm xa bằng 2√(h·y): h = 40 cm, lỗ cao 120 cm so với sàn → khoảng 138,6 cm', () => {
+    expect(computeApSuatChatLong({ h_cm: 40, d_liquid: 10000 }).jetRange).toBeCloseTo(138.6, 1);
+  });
+
+  it('tầm xa không phụ thuộc loại chất lỏng', () => {
+    const water = computeApSuatChatLong({ h_cm: 40, d_liquid: 10000 });
+    const oil = computeApSuatChatLong({ h_cm: 40, d_liquid: 8000 });
+    expect(oil.jetRange).toBe(water.jetRange);
+    expect(oil.p).toBeLessThan(water.p);
+  });
+});

@@ -18,3 +18,16 @@ describe('Thí nghiệm Xác định Khối lượng riêng', () => {
     expect(res.material).toContain('Sắt');
   });
 });
+
+describe('Số liệu đo vô lý', () => {
+  it('báo không hợp lệ khi mực nước lúc sau không cao hơn lúc đầu', () => {
+    const res = computeKhoiLuongRieng({ m_g: 54, V1_cm3: 60, V2_cm3: 55 });
+    expect(res.valid).toBe(false);
+    expect(Number.isFinite(res.D_kg_m3)).toBe(true);
+  });
+
+  it('vật có D nhỏ hơn 1000 kg/m³ được báo là nhẹ hơn nước', () => {
+    const res = computeKhoiLuongRieng({ m_g: 12, V1_cm3: 50, V2_cm3: 70 }); // 0,6 g/cm³
+    expect(res.material).toContain('Nhẹ hơn nước');
+  });
+});

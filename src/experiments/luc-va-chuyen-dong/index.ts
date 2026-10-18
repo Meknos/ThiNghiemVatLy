@@ -6,20 +6,29 @@ export const lucVaChuyenDongTemplate: ExperimentTemplate<LucVaChuyenDongParams> 
   title: 'Lực, Chuyển Động & Tương Tác Vật Thể',
   group: 'Cơ học',
   topic: 'Chuyển động & Lực',
-  grade: 8,
+  grade: null, // gồm các bài của lớp 6, 7, 8, 9; xem nhãn từng bài
   params: {
+    scene: {
+      label: 'Bài thí nghiệm (1: lò xo, 2: ma sát, 3: đo tốc độ, 4: đòn bẩy, 5: cơ năng)',
+      symbol: 'Bài',
+      unit: '',
+      min: 1,
+      max: 5,
+      step: 1,
+      defaultVal: 1
+    },
     gravity: {
-      label: 'Gia tốc trọng trường',
+      label: 'Trọng lượng của mỗi kg',
       symbol: 'g',
-      unit: 'm/s²',
+      unit: 'N/kg',
       min: 0,
       max: 25,
       step: 0.1,
-      defaultVal: 10 // g = 10 N/kg (khớp P ≈ 10m theo PLAN.md)
+      defaultVal: 10 // P = 10·m theo SGK THCS
     },
     airDrag: {
-      label: 'Hệ số cản không khí',
-      symbol: 'k_drag',
+      label: 'Lực cản không khí (minh họa)',
+      symbol: 'k',
       unit: '',
       min: 0,
       max: 0.05,
@@ -28,21 +37,20 @@ export const lucVaChuyenDongTemplate: ExperimentTemplate<LucVaChuyenDongParams> 
     }
   },
   outputs: [
-    { label: 'Trọng trường chuẩn', symbol: 'g', unit: 'N/kg' },
-    { label: 'Hệ số ma sát sàn', symbol: 'μ', unit: '' }
+    { label: 'Trọng lượng của vật 1 kg', symbol: 'P', unit: 'N' }
   ],
   compute: (p) => {
     return {
-      g: p.gravity,
-      'μ': 0.6
+      P: p.gravity
     };
   },
   formulas: [
-    'P = 10 \\cdot m \\quad (\\text{Trọng lực})',
-    'v = \\frac{s}{t} \\quad (\\text{Tốc độ trung bình})',
-    'W_c = W_đ + W_t \\quad (\\text{Cơ năng bảo toàn})'
+    'P = 10 \\cdot m \\quad (\\text{Trọng lượng})',
+    'v = \\frac{s}{t} \\quad (\\text{Tốc độ})',
+    'M = F \\cdot d \\quad (\\text{Mô men lực})',
+    'W = W_đ + W_t \\quad (\\text{Cơ năng})'
   ],
-  conditions: 'Tương tác vật rắn 2D theo thời gian thực (Matter.js), hỗ trợ va chạm, mặt phẳng nghiêng, lò xo, con lắc và cổng quang đo đạc.',
-  aiHint: 'Các bài toán cơ học chuyển động, rơi tự do, xe trượt mặt nghiêng, va chạm giữa các vật, con lắc đơn, lò xo dao động.',
+  conditions: 'Mô phỏng vật rắn trong mặt phẳng: 1 m = 100 px, khối lượng tính bằng kg, g = 10 N/kg. Lò xo tuân theo F = k·Δl, ma sát trượt F = μ·N. Lực cản không khí chỉ mang tính minh họa.',
+  aiHint: 'Các bài cơ học: lò xo treo quả nặng và độ giãn; lực ma sát trên các bề mặt; đo tốc độ bằng cổng quang; đòn bẩy và mô men lực; chuyển hóa động năng và thế năng.',
   View: LucVaChuyenDongView
 };

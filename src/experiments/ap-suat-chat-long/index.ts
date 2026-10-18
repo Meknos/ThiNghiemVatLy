@@ -30,7 +30,7 @@ export const apSuatChatLongTemplate: ExperimentTemplate<ApSuatChatLongParams> = 
   },
   outputs: [
     { label: 'Áp suất chất lỏng', symbol: 'p', unit: 'N/m² (Pa)' },
-    { label: 'Tầm xa tia nước phụt ra', symbol: 'x', unit: 'cm' }
+    { label: 'Tầm xa tia nước từ lỗ ở độ sâu h', symbol: 'x', unit: 'cm' }
   ],
   compute: (p) => {
     const res = computeApSuatChatLong(p);
@@ -41,9 +41,9 @@ export const apSuatChatLongTemplate: ExperimentTemplate<ApSuatChatLongParams> = 
   },
   formulas: [
     'p = d \\cdot h',
-    '\\text{Càng xuống sâu } h \\uparrow \\implies p \\uparrow \\implies \\text{Tia nước phụt càng xa}'
+    '\\text{Càng sâu, } h \\text{ càng lớn} \\Rightarrow p \\text{ càng lớn} \\Rightarrow \\text{tia nước phun càng mạnh}'
   ],
-  conditions: 'Chất lỏng đứng yên, h là độ sâu thẳng đứng từ mặt thoáng tới điểm xét (tính bằng m). Áp suất chất lỏng tác dụng theo mọi phương lên đáy bình, thành bình và các vật trong nó.',
+  conditions: 'Chất lỏng đứng yên, h là độ sâu thẳng đứng từ mặt thoáng tới điểm xét (tính bằng m). Áp suất chất lỏng tác dụng theo mọi phương lên đáy bình, thành bình và các vật trong nó. Trong mô phỏng, mực chất lỏng được giữ không đổi và bình đặt trên giá cao 80 cm.',
   aiHint: 'Các bài toán tính áp suất ở đáy bình hoặc ở độ sâu h trong cột nước/dầu; so sánh tia nước phụt ra từ các lỗ ở thành bình.',
   View: ApSuatChatLongView
 };

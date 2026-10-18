@@ -6,28 +6,34 @@ export interface ApSuatChatLongParams {
 }
 
 export interface ApSuatChatLongOutputs {
-  p: number;        // Áp suất chất lỏng tại độ sâu h (N/m² hoặc Pa)
-  jetRange: number; // Tầm xa tia nước phụt ra từ lỗ thành bình (cm)
+  p: number;        // Áp suất chất lỏng tại độ sâu h (N/m² hay Pa)
+  jetRange: number; // Tầm xa tia nước phun ra từ lỗ ở độ sâu h (cm)
+}
+
+/** Cột chất lỏng cao 80 cm, bình đặt trên giá cao 80 cm so với mặt sàn. */
+export const COLUMN_HEIGHT_CM = 80;
+export const STAND_HEIGHT_CM = 80;
+
+/**
+ * Tầm xa của tia nước phun ngang từ lỗ ở độ sâu h, rơi xuống sàn.
+ * Tốc độ phun v = √(2gh), thời gian rơi t = √(2y/g) với y là độ cao của lỗ so với sàn,
+ * nên x = v·t = 2√(h·y). Vì bình đặt trên giá cao, lỗ càng sâu tia nước càng đi xa.
+ */
+export function jetRangeCm(h_cm: number): number {
+  const h = Math.max(0, Math.min(COLUMN_HEIGHT_CM, h_cm));
+  const dropHeight = COLUMN_HEIGHT_CM - h + STAND_HEIGHT_CM;
+  return 2 * Math.sqrt(h * dropHeight);
 }
 
 export function computeApSuatChatLong(params: ApSuatChatLongParams): ApSuatChatLongOutputs {
   const h_cm = Math.max(1, params.h_cm);
   const d_liquid = Math.max(100, params.d_liquid);
 
-  // h (m) = h (cm) / 100
-  const h_m = Units.cmToM(h_cm);
-
-  // p = d * h
-  const p = d_liquid * h_m;
-
-  // Giả sử cột nước tổng cao H = 80 cm
-  // Tầm xa tia nước từ định luật Torricelli: x = 2 * sqrt(h * (H - h))
-  const H_cm = 80;
-  const clamped_h = Math.min(H_cm - 1, h_cm);
-  const jetRange = 2 * Math.sqrt(clamped_h * (H_cm - clamped_h));
+  // p = d·h, với h tính bằng mét
+  const p = d_liquid * Units.cmToM(h_cm);
 
   return {
     p: Math.round(p),
-    jetRange: Number(jetRange.toFixed(1))
+    jetRange: Number(jetRangeCm(h_cm).toFixed(1))
   };
 }

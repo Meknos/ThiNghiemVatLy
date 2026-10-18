@@ -23,7 +23,11 @@ const {
  *  - Canvas is sized at CSS pixels × devicePixelRatio for sharp rendering.
  *  - All drawing coordinates are in CSS pixels (the ctx is scaled once per frame).
  *  - Matter.js body positions are also in CSS-pixel space so they map 1:1 to drawing.
- *  - A separate `scale` factor converts CSS pixels ↔ metres for display labels.
+ *  - `scale` (px per metre) ties pixels to SI units: 1 m = 100 px, so Matter's
+ *    default gravity (0.001 px/ms² = 1000 px/s²) is exactly g = 10 m/s².
+ *  - Body mass is read as kg. Springs and sliding friction are applied as real
+ *    forces in newtons (see applyForceN) because Matter's own constraints and
+ *    contact friction do not follow F = k·Δl or F = μ·N.
  *  - The ground plane sits 50 CSS-px above the canvas bottom so labels aren't clipped.
  */
 export class PhysicsEngine {
@@ -33,7 +37,7 @@ export class PhysicsEngine {
 
     // --- Coordinate system ---
     // 1 metre = this.scale CSS-pixels
-    this.scale = 25.0;
+    this.scale = 100.0;
     this.timeScale = 1.0;
     this.gravityVal = 10.0; // N/kg theo SGK KHTN THCS
     this.airDrag = 0.0;
@@ -52,6 +56,9 @@ export class PhysicsEngine {
     this.hoveredBody = null;
     this.activeTool = 'drag';
     this.springFirstBody = null;
+
+    // --- Force-based springs (Hooke's law), see addSpring ---
+    this.springs = [];
 
     // --- Instruments ---
     this.ruler = new VirtualRuler(this);
@@ -198,15 +205,19 @@ export class PhysicsEngine {
     Composite.allConstraints(this.world).forEach(c => {
       if (c !== this.mouseConstraint.constraint) Composite.remove(this.world, c);
     });
+    this.springs = [];
+    this.springFirstBody = null;
     this.selectedBody = null;
     this.simTime = 0;
-    this.photogate.log = [];
-    this.photogate.lastTriggeredTime = 0;
+    this.ruler.hide();
+    this.photogate.hide();
+    this.photogate.reset();
     if (this.onSelectCallback) this.onSelectCallback(null);
     this.render();
   }
 
   setGravity(g) {
+    // scale 0.001 px/ms² ⇔ 10 m/s² at 100 px/m
     this.gravityVal = g;
     this.engine.gravity.y = g === 0 ? 0 : 1.0;
     this.engine.gravity.scale = g === 0 ? 0 : (g / 10.0) * 0.001;
@@ -230,6 +241,7 @@ export class PhysicsEngine {
       customColor: options.color     || '#38bdf8',
       trail: []
     });
+    if (options.mass)     Body.setMass(box, options.mass);
     if (options.angle)    Body.setAngle(box, options.angle);
     if (options.velocity) Body.setVelocity(box, options.velocity);
     Composite.add(this.world, box);
@@ -247,6 +259,7 @@ export class PhysicsEngine {
       customColor: options.color     || '#10b981',
       trail: []
     });
+    if (options.mass)     Body.setMass(circle, options.mass);
     if (options.velocity) Body.setVelocity(circle, options.velocity);
     Composite.add(this.world, circle);
     return circle;
@@ -266,15 +279,109 @@ export class PhysicsEngine {
     return ramp;
   }
 
-  addSpring(bodyA, bodyB, length, stiffness = 0.05, damping = 0.02) {
-    const spring = Constraint.create({
-      bodyA, bodyB,
-      length: length || Vector.magnitude(Vector.sub(bodyA.position, bodyB.position)),
-      stiffness, damping,
-      render: { type: 'spring' }
-    });
-    Composite.add(this.world, spring);
+  /**
+   * Lò xo theo định luật Hooke: F = k·Δl (k tính bằng N/m), giảm chấn c (N·s/m).
+   * bodyA có thể là null, khi đó đầu A gắn vào điểm cố định `anchors.pointA`.
+   * `anchors.offsetA/offsetB` là điểm gắn trên vật (tọa độ theo vật, xoay cùng vật).
+   * `anchors.rope = true`: dây mềm, chỉ kéo chứ không đẩy.
+   */
+  addSpring(bodyA, bodyB, length, k = 20, c = 0.5, anchors = {}) {
+    const spring = {
+      bodyA, bodyB, k, c,
+      pointA: anchors.pointA || null,
+      offsetA: anchors.offsetA || { x: 0, y: 0 },
+      offsetB: anchors.offsetB || { x: 0, y: 0 },
+      rope: !!anchors.rope,
+      length: 0
+    };
+    const { pA, pB } = this._springEnds(spring);
+    spring.length = length || Math.hypot(pB.x - pA.x, pB.y - pA.y);
+    this.springs.push(spring);
     return spring;
+  }
+
+  _springEnds(s) {
+    const end = (body, offset, fixed) => {
+      if (!body) return fixed;
+      const r = Vector.rotate(offset, body.angle);
+      return { x: body.position.x + r.x, y: body.position.y + r.y };
+    };
+    return { pA: end(s.bodyA, s.offsetA, s.pointA), pB: end(s.bodyB, s.offsetB, null) };
+  }
+
+  /** Độ giãn hiện tại của lò xo (m), dương khi bị kéo dài. */
+  springExtensionM(s) {
+    const { pA, pB } = this._springEnds(s);
+    return (Math.hypot(pB.x - pA.x, pB.y - pA.y) - s.length) / this.scale;
+  }
+
+  /** Tác dụng một lực tính bằng newton lên vật tại một điểm. */
+  applyForceN(body, point, fx, fy) {
+    const f = this.scale / 1e6; // N/kg → px/ms²
+    Body.applyForce(body, point, { x: fx * f, y: fy * f });
+  }
+
+  /** Vận tốc của vật theo m/s. */
+  velocityMps(body) {
+    const v = Body.getVelocity(body);
+    return { x: (v.x * 60) / this.scale, y: (v.y * 60) / this.scale };
+  }
+
+  _applySprings() {
+    const alive = new Set(Composite.allBodies(this.world));
+    this.springs = this.springs.filter(s => alive.has(s.bodyB) && (!s.bodyA || alive.has(s.bodyA)));
+
+    for (const s of this.springs) {
+      const { pA, pB } = this._springEnds(s);
+      const dx = pB.x - pA.x, dy = pB.y - pA.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-6) continue;
+      const ux = dx / len, uy = dy / len;
+      const ext = (len - s.length) / this.scale;
+      if (s.rope && ext <= 0) continue;
+
+      const vB = this.velocityMps(s.bodyB);
+      const vA = s.bodyA ? this.velocityMps(s.bodyA) : { x: 0, y: 0 };
+      const vRel = (vB.x - vA.x) * ux + (vB.y - vA.y) * uy;
+      const F = s.k * ext + s.c * vRel; // > 0: kéo hai đầu lại gần nhau
+
+      if (!s.bodyB.isStatic) this.applyForceN(s.bodyB, pB, -F * ux, -F * uy);
+      if (s.bodyA && !s.bodyA.isStatic) this.applyForceN(s.bodyA, pA, F * ux, F * uy);
+    }
+  }
+
+  /**
+   * Ma sát trượt F = μ·N = μ·m·g cho các vật có `slideMu`, đang trượt trên mặt
+   * nằm ngang. Vật dừng hẳn khi tốc độ về 0 (không bị đẩy ngược lại).
+   */
+  _applySlidingFriction(dtSec) {
+    Composite.allBodies(this.world).forEach(b => {
+      if (b.isStatic || b.slideMu == null || b === this.mouseConstraint.body) return;
+      const v = this.velocityMps(b);
+      if (Math.abs(v.y) > 0.3) return; // đang rơi, chưa nằm trên mặt đỡ
+      const dv = b.slideMu * this.gravityVal * dtSec;
+      if (Math.abs(v.x) <= dv) {
+        Body.setVelocity(b, { x: 0, y: Body.getVelocity(b).y });
+      } else {
+        this.applyForceN(b, b.position, -Math.sign(v.x) * b.slideMu * b.mass * this.gravityVal, 0);
+      }
+    });
+  }
+
+  /** Động năng, thế năng hấp dẫn và thế năng đàn hồi (J) của các vật tự do. */
+  energy() {
+    let ke = 0, pe = 0, elastic = 0;
+    Composite.allBodies(this.world).forEach(b => {
+      if (b.isStatic || this.isBoundary(b)) return;
+      const v = this.velocityMps(b);
+      ke += 0.5 * b.mass * (v.x * v.x + v.y * v.y);
+      pe += b.mass * this.gravityVal * ((this.groundY - b.position.y) / this.scale);
+    });
+    for (const s of this.springs) {
+      const ext = this.springExtensionM(s);
+      if (!(s.rope && ext <= 0)) elastic += 0.5 * s.k * ext * ext;
+    }
+    return { ke, pe, elastic, total: ke + pe + elastic };
   }
 
   addPin(body, x, y) {
@@ -298,8 +405,10 @@ export class PhysicsEngine {
     const subSteps = 4;
     const stepDt = (effectiveDt * 1000) / subSteps;
 
+    const stepSec = stepDt / 1000;
+
     for (let i = 0; i < subSteps; i++) {
-      // Apply quadratic air drag  F = -½ k |v|² v̂
+      // Lực cản không khí (mô hình minh họa): tỉ lệ với bình phương tốc độ
       if (this.airDrag > 0) {
         Composite.allBodies(this.world).forEach(b => {
           if (b.isStatic) return;
@@ -314,10 +423,13 @@ export class PhysicsEngine {
           }
         });
       }
+      this._applySprings();
+      this._applySlidingFriction(stepSec);
       Engine.update(this.engine, stepDt);
-    }
 
-    this.simTime += effectiveDt;
+      this.simTime += stepSec;
+      this.photogate.update(Composite.allBodies(this.world), this.simTime, this);
+    }
 
     // Record motion trails
     Composite.allBodies(this.world).forEach(b => {
@@ -329,13 +441,6 @@ export class PhysicsEngine {
         if (b.trail.length > 120) b.trail.shift();
       }
     });
-
-    // Photogate sensor
-    this.photogate.checkCollision(
-      Composite.allBodies(this.world),
-      this.simTime,
-      (v) => this.toMetersSpeed(v)
-    );
   }
 
   /* ------------------------------------------------------------------
@@ -365,6 +470,7 @@ export class PhysicsEngine {
     if (this.showTrails)  this._drawTrails(ctx);
 
     this._drawConstraints(ctx);
+    this._drawSprings(ctx);
     this._drawBodies(ctx);
 
     if (this.showVectors) this._drawVectors(ctx);
@@ -384,30 +490,28 @@ export class PhysicsEngine {
   /* ---- Grid ---- */
   _drawGrid(ctx, w, h) {
     ctx.save();
-    const step = this.scale * 2; // Every 2 m
+    const step = this.scale / 2; // vạch mỗi 0,5 m
     const gy = this.groundY;
 
-    // Vertical lines
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
     ctx.lineWidth = 1;
-    for (let x = step; x < w; x += step) {
+    for (let i = 1, x = step; x < w; i++, x += step) {
+      ctx.strokeStyle = i % 2 === 0 ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.03)';
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, gy); ctx.stroke();
     }
-    // Horizontal lines
-    for (let y = gy; y > 0; y -= step) {
+    for (let i = 0, y = gy; y > 0; i++, y -= step) {
+      ctx.strokeStyle = i % 2 === 0 ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.03)';
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
     }
-    // Labels
-    ctx.fillStyle = 'rgba(148,163,184,0.4)';
+    // Nhãn mỗi 1 m
+    ctx.fillStyle = 'rgba(148,163,184,0.55)';
     ctx.font = '9px JetBrains Mono, monospace';
     ctx.textBaseline = 'middle';
-    for (let x = step; x < w; x += step) {
+    for (let x = this.scale; x < w; x += this.scale) {
       ctx.fillText(`${Math.round(x / this.scale)}m`, x + 2, gy + 14);
     }
     ctx.textAlign = 'right';
-    for (let y = gy - step; y > 0; y -= step) {
-      const m = Math.round((gy - y) / this.scale);
-      ctx.fillText(`${m}m`, 30, y + 1);
+    for (let y = gy - this.scale; y > 0; y -= this.scale) {
+      ctx.fillText(`${Math.round((gy - y) / this.scale)}m`, 30, y + 1);
     }
     ctx.restore();
   }
@@ -527,7 +631,7 @@ export class PhysicsEngine {
     ctx.font = 'bold 9px JetBrains Mono, monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(b.isStatic ? '⚓' : `${b.mass.toFixed(1)}kg`, 0, r + 14);
+    ctx.fillText(b.isStatic ? '⚓' : `${b.mass.toFixed(1).replace('.', ',')} kg`, 0, r + 14);
   }
 
   _drawPolygonBody(ctx, b, color) {
@@ -580,7 +684,7 @@ export class PhysicsEngine {
     ctx.font = 'bold 9px JetBrains Mono, monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const label = b.isStatic ? (b.label || 'Static') : `${b.mass.toFixed(1)}kg`;
+    const label = b.isStatic ? (b.label || '') : `${b.mass.toFixed(1).replace('.', ',')} kg`;
     ctx.fillText(label, 0, 0);
   }
 
@@ -622,11 +726,35 @@ export class PhysicsEngine {
         ctx.fill(); ctx.stroke();
         ctx.shadowBlur = 0;
       } else {
-        // Spring coil
-        this._drawSpringCoil(ctx, pA, pB);
+        // Dây treo / thanh nối
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(pA.x, pA.y); ctx.lineTo(pB.x, pB.y); ctx.stroke();
       }
       ctx.restore();
     });
+  }
+
+  _drawSprings(ctx) {
+    for (const s of this.springs) {
+      const { pA, pB } = this._springEnds(s);
+      ctx.save();
+      if (s.rope) {
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(pA.x, pA.y); ctx.lineTo(pB.x, pB.y); ctx.stroke();
+      } else {
+        this._drawSpringCoil(ctx, pA, pB);
+      }
+      if (!s.bodyA) {
+        // Giá treo cố định
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(pA.x - 30, pA.y - 8, 60, 8);
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath(); ctx.arc(pA.x, pA.y, 4, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
   }
 
   _drawSpringCoil(ctx, p1, p2) {
@@ -670,15 +798,15 @@ export class PhysicsEngine {
       const vx = b.velocity.x, vy = b.velocity.y;
 
       // Velocity vector
-      const vScale = 4;
+      const vScale = 6;
       if (Math.hypot(vx, vy) > 0.15) {
-        this._drawArrow(ctx, px, py, px + vx * vScale, py + vy * vScale, '#10b981', 2.5, 'v⃗');
+        this._drawArrow(ctx, px, py, px + vx * vScale, py + vy * vScale, '#10b981', 2.5, 'v');
       }
 
       // Gravity vector P = mg
       if (this.gravityVal > 0) {
-        const pMag = Math.min(55, b.mass * this.gravityVal * 1.2);
-        this._drawArrow(ctx, px, py, px, py + pMag, '#ef4444', 2, 'P⃗');
+        const pMag = Math.min(70, 12 + b.mass * this.gravityVal * 1.5);
+        this._drawArrow(ctx, px, py, px, py + pMag, '#ef4444', 2, 'P');
       }
     });
   }
@@ -739,7 +867,8 @@ export class PhysicsEngine {
       return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     };
 
-    this.canvas.addEventListener('mousedown', (e) => {
+    // Pointer events: dùng được cả chuột lẫn ngón tay trên bảng tương tác
+    this.canvas.addEventListener('pointerdown', (e) => {
       const pos = getCSSPos(e);
       downPos = { ...pos };
 
@@ -778,13 +907,13 @@ export class PhysicsEngine {
       }
     });
 
-    window.addEventListener('mousemove', (e) => {
+    window.addEventListener('pointermove', (e) => {
       const pos = getCSSPos(e);
       this.ruler.handleMouseMove(pos);
       this.photogate.handleMouseMove(pos);
     });
 
-    window.addEventListener('mouseup', (e) => {
+    window.addEventListener('pointerup', (e) => {
       const pos = getCSSPos(e);
       this.ruler.handleMouseUp();
       this.photogate.handleMouseUp();

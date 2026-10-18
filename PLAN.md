@@ -156,6 +156,13 @@ Hoàn thành khi: thêm một mẫu thử chỉ cần một thư mục và một
 - [x] Chia sẻ thí nghiệm bằng đường dẫn (URL query params: `?exp=...`).
 
 
+### M12 — Phủ công thức vật lý KHTN 6–9 (L)
+- [x] Thư viện công thức hỗ trợ ba dạng: tích (v = s/t), tổng (R = R1 + R2, 1/f = 1/d + 1/d'), riêng (cân bằng nhiệt, tốc độ trung bình hai đoạn); thanh trượt dùng đơn vị quen thuộc (mm², cm², ×10⁻⁸ Ω·m), thay số theo SI.
+- [x] 41 mẫu công thức: đo nhiệt độ, chuyển động, lực, áp suất, máy cơ đơn giản, năng lượng, âm học, quang học (thấu kính, kính lúp, chiết suất), điện học (điện trở, nối tiếp, song song, Jun – Len-xơ, truyền tải, biến áp), nhiệt học.
+- [x] Hình minh họa động: đường truyền tia qua thấu kính hội tụ/phân kì, tiếng vang, dao động âm, đòn bẩy, lò xo, máy nén thủy lực, mặt phẳng nghiêng, mạch nối tiếp/song song, dây dẫn, đun nóng, cân bằng nhiệt.
+- [x] Không có AI vẫn trích được số liệu từ đề (`src/ai/extract.ts`): đổi đơn vị, tra bảng chất (nhiệt dung riêng, điện trở suất, trọng lượng riêng chất lỏng, năng suất tỏa nhiệt), tự nhận đại lượng cần tìm.
+- [x] Bộ 41 đề kiểm thử `tests/ai-cases/formula-routes.test.ts`: đúng mẫu, đúng số liệu, đúng đáp số.
+
 ## Việc song song, cần giáo viên hoặc người có chuyên môn
 
 - [ ] Đối chiếu 17 thí nghiệm với sách giáo khoa, điền cột `grade` cho từng mẫu.
