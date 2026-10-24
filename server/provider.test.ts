@@ -73,6 +73,20 @@ describe('ChatApiProvider', () => {
     expect(res.notes.some((n) => n.includes('vượt quá'))).toBe(true);
   });
 
+  it('AI đổi đơn vị sai (1,5 m² thành 1500 cm²) thì sửa theo số liệu trong đề và báo lại', async () => {
+    stubFetch(reply('{"status":"success","templateId":"ap-suat","params":{"F":340000,"S":1500,"find":1},"asks":["áp suất p"],"summary":""}'));
+    const res = await make().extractExperiment('Một xe tăng có trọng lượng 340000 N, diện tích tiếp xúc của các bản xích với mặt đất là 1,5 m². Tính áp suất của xe tăng lên mặt đất.');
+    expect(res.params).toMatchObject({ F: 340000, S: 15000 });
+    expect(res.notes.some((n) => n.includes('đổi đơn vị'))).toBe(true);
+  });
+
+  it('khác biệt không phải lũy thừa của 10 thì giữ số của AI (2 giờ 30 phút = 9000 s)', async () => {
+    stubFetch(reply('{"status":"success","templateId":"toc-do","params":{"s":120000,"t":9000,"find":1},"asks":[],"summary":""}'));
+    const res = await make().extractExperiment('Một ô tô đi quãng đường 120 km trong 2 giờ 30 phút. Tính tốc độ của ô tô ra km/h.');
+    expect(res.params).toMatchObject({ s: 120000, t: 9000 });
+    expect(res.notes).toEqual([]);
+  });
+
   it('nhận kết quả hợp lệ và giữ đúng tham số của mẫu', async () => {
     stubFetch(reply('{"status":"success","templateId":"toc-do","params":{"s":1500,"t":300,"find":1},"asks":["tốc độ v"],"summary":"Tóm tắt"}'));
     const res = await make().extractExperiment('đề');

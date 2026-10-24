@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { dispatchContextToTemplate } from '../src/ai/dispatcher';
+import { extractFormulaParams } from '../src/ai/extract';
+import { FORMULAS } from '../src/experiments/cong-thuc/formulas';
 import { getExperimentById } from '../src/core/registry';
 import { validateParams } from '../src/core/validate';
 import { buildSystemPrompt } from './prompt';
@@ -209,6 +211,8 @@ export class ChatApiProvider implements AiProvider {
       if (retry && (retry.status === 'unsupported' || outOfRange(retry).length < overflow.length)) parsed = retry;
     }
 
+    const unitNotes = parsed.status === 'success' ? fixUnitSlips(parsed, prompt) : [];
+
     if (parsed.status === 'unsupported') {
       return {
         status: 'unsupported',
@@ -221,8 +225,40 @@ export class ChatApiProvider implements AiProvider {
         notes: []
       };
     }
-    return finalize(parsed, 'ai', []);
+    return finalize(parsed, 'ai', unitNotes);
   }
+}
+
+/**
+ * Mô hình thỉnh thoảng đổi đơn vị sai (1,5 m² thành 1500 cm² thay vì 15000 cm²).
+ * Đối chiếu với bộ đọc số liệu theo quy tắc: chỉ khi hai bên lệch nhau đúng một lũy thừa của 10
+ * (dấu hiệu nhầm đơn vị) mới lấy số của bộ quy tắc; các khác biệt khác giữ nguyên số của mô hình.
+ */
+function fixUnitSlips(parsed: { templateId: string; params: Record<string, number> }, prompt: string): string[] {
+  const template = getExperimentById(parsed.templateId);
+  if (!template) return [];
+  const formula = FORMULAS.find((f) => f.id === parsed.templateId);
+  let reference: Record<string, number> = {};
+  if (formula) {
+    reference = extractFormulaParams(formula, prompt);
+  } else {
+    const dispatch = dispatchContextToTemplate(prompt);
+    if (dispatch.templateId === parsed.templateId) reference = dispatch.extractedParams ?? {};
+  }
+
+  const notes: string[] = [];
+  for (const [key, value] of Object.entries(parsed.params)) {
+    const ref = reference[key];
+    if (key === 'find' || !template.params[key] || !(value > 0) || !(ref > 0)) continue;
+    const exponent = Math.log10(value / ref);
+    const k = Math.round(exponent);
+    if (k !== 0 && Math.abs(exponent - k) < 0.005) {
+      const def = template.params[key];
+      notes.push(`Đã sửa ${def.label} (${def.symbol}) từ ${value} thành ${ref}${def.unit ? ' ' + def.unit : ''} theo số liệu trong đề, do AI đổi đơn vị chưa đúng.`);
+      parsed.params[key] = ref;
+    }
+  }
+  return notes;
 }
 
 /** Các số liệu nằm ngoài khoảng cho phép của mẫu, mô tả ngắn để hỏi lại mô hình. */
