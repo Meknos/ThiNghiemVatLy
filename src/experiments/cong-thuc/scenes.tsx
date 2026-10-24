@@ -598,8 +598,9 @@ const PressureScene: React.FC<SceneProps> = ({ values }) => {
   const t = useAnimationTime();
   const ease = Math.min(1, (t % 4) / 1.5); // vật hạ xuống rồi giữ yên, lặp lại
   const w = logScale(S, 0.1, 100000, 24, 230);
-  const sink = logScale(p, 10, 10000000, 3, 30) * ease;
-  const cx = 200, ground = 100;
+  // Lún tối đa 22 để nhãn diện tích bên dưới vẫn nằm trong khung hình cao 150
+  const sink = logScale(p, 10, 10000000, 3, 22) * ease;
+  const cx = 200, ground = 92;
   const top = ground + sink - 44;
   const arrows = Math.max(2, Math.round(w / 26));
 
@@ -620,8 +621,8 @@ const PressureScene: React.FC<SceneProps> = ({ values }) => {
         const x = cx - w / 2 + ((k + 0.5) * w) / arrows;
         return <line key={k} x1={x} y1={top - 22} x2={x} y2={top - 3} stroke={C.force} strokeWidth="2.2" markerEnd="url(#pressArrow)" />;
       })}
-      <line x1={cx - w / 2} y1={ground + sink + 10} x2={cx + w / 2} y2={ground + sink + 10} stroke={C.warn} strokeWidth="1.5" />
-      <text x={cx} y={ground + sink + 24} fill={C.warn} fontSize="12" fontWeight="bold" textAnchor="middle">S = {fmt(S)} cm²</text>
+      <line x1={cx - w / 2} y1={ground + sink + 8} x2={cx + w / 2} y2={ground + sink + 8} stroke={C.warn} strokeWidth="1.5" />
+      <text x={cx} y={ground + sink + 22} fill={C.warn} fontSize="12" fontWeight="bold" textAnchor="middle">S = {fmt(S)} cm²</text>
       <text x="400" y="44" fill={C.ok} fontSize="15" fontWeight="bold">p = {fmt(p)} Pa</text>
       <text x="400" y="68" fill={C.text} fontSize="12">Áp lực F = {fmt(F)} N</text>
       <text x="400" y="88" fill={C.text} fontSize="12">Diện tích bị ép S = {fmt(S / 10000)} m²</text>

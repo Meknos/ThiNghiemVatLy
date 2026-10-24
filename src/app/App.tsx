@@ -84,7 +84,8 @@ export const App: React.FC = () => {
       openExperiment(template.id, res.params);
       // Cho giáo viên thấy những số liệu đã lấy từ đề bài để kiểm tra lại
       const filled = Object.entries(res.params)
-        .filter(([key]) => template.params[key])
+        // "find" chỉ là số thứ tự đại lượng cần tìm, đã hiện ở dòng "Cần tìm" nên không liệt kê như số liệu
+        .filter(([key]) => template.params[key] && key !== 'find')
         .map(([key, value]) => {
           const def = template.params[key];
           return `${def.symbol} = ${String(value).replace('.', ',')}${def.unit ? ' ' + def.unit : ''}`;
