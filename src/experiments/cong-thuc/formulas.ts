@@ -313,7 +313,7 @@ export const FORMULAS: FormulaDef[] = [
     ],
     latex: 'p = \\frac{F}{S}',
     conditions: 'Áp lực là lực ép vuông góc với mặt bị ép; vật đặt trên mặt nằm ngang thì F = P = 10·m. Diện tích đổi ra m² khi tính (1 cm² = 0,0001 m²); 1 Pa = 1 N/m².',
-    aiHint: 'Các bài tính toán áp suất p = F/S khi đề hỏi áp lực hoặc diện tích bị ép (ví dụ người nặng bao nhiêu, diện tích tiếp xúc tối thiểu để không lún). Bài chỉ hỏi áp suất của vật đặt trên mặt sàn thì ưu tiên mẫu ap-suat-chat-ran.',
+    aiHint: 'Các bài tính toán áp suất p = F/S khi đề hỏi áp lực hoặc diện tích bị ép (ví dụ người nặng bao nhiêu, diện tích tiếp xúc tối thiểu để không lún). Bài chỉ hỏi áp suất của vật nhỏ (đến 100 kg, mặt tiếp xúc đến 1000 cm²) đặt trên mặt sàn thì ưu tiên mẫu ap-suat-chat-ran; vật lớn như người, xe, xe tăng, tòa nhà thì dùng mẫu này (điền F = P = 10·m).',
     scene: 'pressure'
   },
   {

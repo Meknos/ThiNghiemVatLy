@@ -45,6 +45,6 @@ export const apSuatChatRanTemplate: ExperimentTemplate<ApSuatParams> = {
     '1\\,\\text{cm}^2 = 0{,}0001\\,\\text{m}^2'
   ],
   conditions: 'Lực F là áp lực vuông góc với mặt bị ép. Đơn vị diện tích S phải quy đổi ra mét vuông (m²). Độ lún trên hình chỉ minh họa tác dụng của áp suất, không phải số đo.',
-  aiHint: 'Các bài toán về khối kim loại/viên gạch đặt trên mặt bàn, đệm mút, cát; tính áp lực F hoặc áp suất p khi thay đổi mặt tiếp xúc.',
+  aiHint: 'Các bài toán về khối kim loại/viên gạch đặt trên mặt bàn, đệm mút, cát; tính áp lực F hoặc áp suất p khi thay đổi mặt tiếp xúc. CHỈ dùng khi khối lượng không quá 100 kg và diện tích tiếp xúc không quá 1000 cm²; vật lớn hơn (người, xe, xe tăng, tòa nhà, diện tích tính bằng m²) thì dùng mẫu ap-suat.',
   View: ApSuatView
 };

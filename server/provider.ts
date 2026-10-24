@@ -192,6 +192,23 @@ export class ChatApiProvider implements AiProvider {
       throw new AiCallError('AI trả lời không đúng khuôn dữ liệu.', `Nội dung nhận được: ${text.slice(0, 300)}`);
     }
 
+    // Số liệu vượt giới hạn của mẫu đã chọn (ví dụ xe tăng 34 tấn ở thí nghiệm khối hộp tối đa 100 kg):
+    // hỏi lại một lần để mô hình chọn mẫu chứa được số liệu, thay vì cắt số làm sai đề
+    const overflow = parsed.status === 'success' ? outOfRange(parsed) : [];
+    if (overflow.length > 0) {
+      const retry = this.parse(
+        await this.chat([
+          ...messages,
+          { role: 'assistant', content: text },
+          {
+            role: 'user',
+            content: `Số liệu vượt khoảng cho phép của mẫu "${parsed.templateId}": ${overflow.join('; ')}. Nếu danh mục có mẫu khác chứa được đúng số liệu này (thường là mẫu công thức tương ứng), hãy chọn mẫu đó và trả lại đúng một đối tượng JSON theo khuôn. Nếu không có mẫu nào khác phù hợp thì trả lại nguyên câu trả lời cũ.`
+          }
+        ]).catch(() => '')
+      );
+      if (retry && (retry.status === 'unsupported' || outOfRange(retry).length < overflow.length)) parsed = retry;
+    }
+
     if (parsed.status === 'unsupported') {
       return {
         status: 'unsupported',
@@ -206,6 +223,19 @@ export class ChatApiProvider implements AiProvider {
     }
     return finalize(parsed, 'ai', []);
   }
+}
+
+/** Các số liệu nằm ngoài khoảng cho phép của mẫu, mô tả ngắn để hỏi lại mô hình. */
+function outOfRange(raw: { templateId: string; params: Record<string, number> }): string[] {
+  const template = getExperimentById(raw.templateId);
+  if (!template) return [];
+  const out: string[] = [];
+  for (const [key, value] of Object.entries(raw.params)) {
+    const def = template.params[key];
+    if (!def || !Number.isFinite(value)) continue;
+    if (value < def.min || value > def.max) out.push(`${key} = ${value} (cho phép ${def.min} đến ${def.max})`);
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------

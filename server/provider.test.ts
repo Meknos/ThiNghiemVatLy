@@ -51,6 +51,28 @@ describe('ChatApiProvider', () => {
     expect(res.templateId).toBe('toc-do');
   });
 
+  it('số liệu vượt giới hạn mẫu trực quan thì hỏi lại để chọn mẫu công thức chứa được số liệu', async () => {
+    const mock = stubFetch(
+      reply('{"status":"success","templateId":"ap-suat-chat-ran","params":{"m":34000,"S":15000},"asks":["áp suất p"],"summary":"Xe tăng"}'),
+      reply('{"status":"success","templateId":"ap-suat","params":{"F":340000,"S":15000,"find":1},"asks":["áp suất p"],"summary":"Xe tăng"}')
+    );
+    const res = await make().extractExperiment('Một xe tăng có trọng lượng 340000 N, diện tích tiếp xúc 1,5 m². Tính áp suất.');
+    expect(mock).toHaveBeenCalledTimes(2);
+    expect(res).toMatchObject({ templateId: 'ap-suat', params: { F: 340000, S: 15000, find: 1 } });
+    expect(res.notes).toEqual([]);
+  });
+
+  it('hỏi lại mà vẫn không có mẫu phù hợp thì giữ câu trả lời cũ và báo số bị đưa về biên', async () => {
+    stubFetch(
+      reply('{"status":"success","templateId":"ap-suat-chat-ran","params":{"m":500,"S":20},"asks":[],"summary":""}'),
+      reply('{"status":"success","templateId":"ap-suat-chat-ran","params":{"m":500,"S":20},"asks":[],"summary":""}')
+    );
+    const res = await make().extractExperiment('đề');
+    expect(res.templateId).toBe('ap-suat-chat-ran');
+    expect(res.params.m).toBe(100);
+    expect(res.notes.some((n) => n.includes('vượt quá'))).toBe(true);
+  });
+
   it('nhận kết quả hợp lệ và giữ đúng tham số của mẫu', async () => {
     stubFetch(reply('{"status":"success","templateId":"toc-do","params":{"s":1500,"t":300,"find":1},"asks":["tốc độ v"],"summary":"Tóm tắt"}'));
     const res = await make().extractExperiment('đề');
