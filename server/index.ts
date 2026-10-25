@@ -17,4 +17,4 @@ const app = createApp({
 
 const PORT = Number(process.env.PORT) || 3001;
 serve({ fetch: app.fetch, port: PORT });
-console.log(`AIPLab AI backend: http://localhost:${PORT} — chế độ: ${getAiProvider().description}`);
+console.log(`AILab AI backend: http://localhost:${PORT} — chế độ: ${getAiProvider().description}`);

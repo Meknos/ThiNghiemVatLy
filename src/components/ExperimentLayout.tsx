@@ -221,7 +221,7 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = `AIPLab_${template.id}_data.csv`;
+                  a.download = `AILab_${template.id}_data.csv`;
                   a.click();
                   setTimeout(() => URL.revokeObjectURL(url), 1000);
                 }}

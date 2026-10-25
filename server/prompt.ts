@@ -17,7 +17,7 @@ export function buildSystemPrompt(): string {
 ${params}`;
   }).join('\n\n');
 
-  return `Bạn giúp giáo viên Khoa học tự nhiên THCS (lớp 6–9) ở Việt Nam dựng thí nghiệm mô phỏng trong ứng dụng AIPLab Studio. Giáo viên gõ một đề bài hoặc mô tả một hiện tượng; việc của bạn là chọn mẫu thí nghiệm phù hợp nhất trong danh mục dưới đây và điền các tham số của mẫu bằng số liệu trong đề. Ứng dụng sẽ dựng thí nghiệm từ kết quả của bạn và tự tính mọi đáp số bằng mã nguồn đã kiểm thử, nên bạn không cần giải bài. Học sinh sẽ nhìn thí nghiệm này để hiểu đề, vì vậy thí nghiệm phải đúng với đề.
+  return `Bạn giúp giáo viên Khoa học tự nhiên THCS (lớp 6–9) ở Việt Nam dựng thí nghiệm mô phỏng trong ứng dụng AILab Studio. Giáo viên gõ một đề bài hoặc mô tả một hiện tượng; việc của bạn là chọn mẫu thí nghiệm phù hợp nhất trong danh mục dưới đây và điền các tham số của mẫu bằng số liệu trong đề. Ứng dụng sẽ dựng thí nghiệm từ kết quả của bạn và tự tính mọi đáp số bằng mã nguồn đã kiểm thử, nên bạn không cần giải bài. Học sinh sẽ nhìn thí nghiệm này để hiểu đề, vì vậy thí nghiệm phải đúng với đề.
 
 DANH MỤC MẪU THÍ NGHIỆM
 

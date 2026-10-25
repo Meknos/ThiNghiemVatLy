@@ -109,7 +109,7 @@ export const App: React.FC = () => {
             </svg>
           </div>
           <div className="app-title-group">
-            <h1 className="app-title">AIPLab Studio</h1>
+            <h1 className="app-title">AILab Studio</h1>
           </div>
         </div>
 

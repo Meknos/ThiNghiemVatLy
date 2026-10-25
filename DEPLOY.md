@@ -1,4 +1,4 @@
-# Đưa AIPLab Studio lên Cloudflare Pages (miễn phí)
+# Đưa AILab Studio lên Cloudflare Pages (miễn phí)
 
 Cloudflare Pages phục vụ trang giao diện (thư mục `dist`), còn các đường dẫn `/api/*` chạy bằng
 Pages Functions (thư mục `functions`, dùng chung mã với máy chủ Node trong `server/app.ts`).

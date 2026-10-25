@@ -1,4 +1,4 @@
-# Kế hoạch thực hiện — AIPLab Studio (THCS)
+# Kế hoạch thực hiện — AILab Studio (THCS)
 
 Mục tiêu: giáo viên nhập ngữ cảnh hoặc một bài toán, AI tạo ra thí nghiệm, giáo viên tương tác trực tiếp. Nội dung bám sách giáo khoa Khoa học tự nhiên THCS (lớp 6–9).
 

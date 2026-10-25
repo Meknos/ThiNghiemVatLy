@@ -1,4 +1,4 @@
-# Cấu hình Cloudflare Pages cho AIPLab Studio
+# Cấu hình Cloudflare Pages cho AILab Studio
 # Giao diện: thư mục dist (npm run build). API: thư mục functions (tự nhận diện).
 name = "aiplab-studio"
 pages_build_output_dir = "dist"

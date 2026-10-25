@@ -1,5 +1,5 @@
 /**
- * AIPLab Studio - Đổi đơn vị chuẩn THCS
+ * AILab Studio - Đổi đơn vị chuẩn THCS
  */
 
 export const Units = {

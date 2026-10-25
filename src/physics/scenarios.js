@@ -1,5 +1,5 @@
 /**
- * AIPLab Studio — Thư viện kịch bản thí nghiệm & Bộ phân tích ngữ cảnh
+ * AILab Studio — Thư viện kịch bản thí nghiệm & Bộ phân tích ngữ cảnh
  * 
  * Each scenario receives (engine, w, h) where w,h are CSS-pixel dimensions
  * of the canvas. engine.groundY gives the Y coordinate of the ground line.

@@ -1,5 +1,5 @@
 /**
- * AIPLab Studio - Virtual Instruments & Measurement Tools
+ * AILab Studio - Virtual Instruments & Measurement Tools
  * Thước đo khoảng cách ảo (Virtual Ruler) & Cổng quang điện ảo (Photogate)
  */
 

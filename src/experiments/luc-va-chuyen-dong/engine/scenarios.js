@@ -1,5 +1,5 @@
 /**
- * AIPLab Studio — Các bài thí nghiệm cơ học theo chương trình KHTN THCS.
+ * AILab Studio — Các bài thí nghiệm cơ học theo chương trình KHTN THCS.
  *
  * Mỗi bài có:
  *  - setup(engine, w, h, st): dựng cảnh; st là trạng thái riêng của bài (giữ qua các lần dựng lại).
