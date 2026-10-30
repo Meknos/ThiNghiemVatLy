@@ -1,0 +1,14 @@
+ĐỀ 1 – ÁP SUẤT CỦA XE TĂNG (LỚP 8)
+Một xe tăng có trọng lượng 340000 N, diện tích tiếp xúc của các bản xích với mặt đất là 1,5 m². Tính áp suất của xe tăng lên mặt đất.
+
+
+ĐỀ 2 – HỆ HAI GƯƠNG PHẲNG (LỚP 7)
+Hai gương phẳng \(G_1\) và \(G_2\) đặt vuông góc với nhau. Một tia sáng chiếu tới gương \(G_1\) với góc tới \(40^\circ\), sau đó phản xạ tới gương \(G_2\). Chứng minh tia sáng cuối cùng song song ngược chiều với tia ban đầu. Nếu góc tới là \(55^\circ\) thì kết luận còn đúng không?
+
+
+ĐỀ 3 – NAM CHÂM, ĐỀ NGOÀI PHẠM VI (LỚP 9)
+Vì sao kim nam châm luôn chỉ hướng Bắc – Nam? Vẽ đường sức từ của nam châm thẳng.
+
+
+ĐỀ DỰ PHÒNG – BẢN MẶT SONG SONG (LỚP 9)
+Một tia sáng truyền từ không khí vào một bản thủy tinh có hai mặt song song. Góc tới tại mặt thứ nhất là 60°. Chiết suất của thủy tinh đối với ánh sáng đang xét là n = √3. Coi chiết suất của không khí bằng 1.

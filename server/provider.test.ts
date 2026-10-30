@@ -87,6 +87,53 @@ describe('ChatApiProvider', () => {
     expect(res.notes).toEqual([]);
   });
 
+  it('đề nhiều câu (công và công suất): đủ hai câu, câu 2 lấy công từ câu 1', async () => {
+    stubFetch(reply(JSON.stringify({
+      status: 'success',
+      summary: 'Kéo vật từ giếng',
+      asks: ['công A', 'công suất 𝒫'],
+      parts: [
+        { title: 'Tính công A', templateId: 'cong-co-hoc', params: { F: 180, s: 8, find: 1 }, links: {}, missing: [], asks: ['công A'] },
+        { title: 'Tính công suất 𝒫', templateId: 'cong-suat', params: { t: 30, find: 1 }, links: { A: '1.A' }, missing: [], asks: ['công suất 𝒫'] }
+      ]
+    })));
+    const res = await make().extractExperiment('Một người kéo đều một vật từ giếng sâu 8 m trong 30 giây. Người ấy phải dùng một lực F = 180 N. Công và công suất của người kéo là bao nhiêu?');
+    expect(res.parts).toHaveLength(2);
+    expect(res.parts[0]).toMatchObject({ templateId: 'cong-co-hoc', params: { F: 180, s: 8, find: 1 }, missing: [] });
+    expect(res.parts[1]).toMatchObject({ templateId: 'cong-suat', params: { t: 30, find: 1 }, links: { A: { from: 0, quantity: 'A' } }, missing: [] });
+    // Câu đầu vẫn nằm ở các trường cũ cho máy khách bản cũ
+    expect(res).toMatchObject({ templateId: 'cong-co-hoc', asks: ['công A', 'công suất 𝒫'] });
+  });
+
+  it('đề hỏi hiện tượng không có số liệu: vẫn dựng thí nghiệm và báo số liệu thiếu', async () => {
+    stubFetch(reply(JSON.stringify({
+      status: 'success',
+      summary: 'Chiếu tia laze vào khối thủy tinh',
+      asks: ['đường đi của tia sáng'],
+      parts: [{ title: 'Đường đi của tia sáng', templateId: 'ban-mat-song-song', params: { i: 85, n: 1.5 }, links: {}, missing: ['e', 'i'], asks: [] }]
+    })));
+    const res = await make().extractExperiment('Chiếu một tia laze từ không khí song song với bề mặt một khối thủy tinh dày, trong suốt. Hiện tượng xảy ra là gì?');
+    expect(res.status).toBe('success');
+    // i đã có trong params nên không tính là thiếu
+    expect(res.parts[0]).toMatchObject({ templateId: 'ban-mat-song-song', params: { i: 85, n: 1.5 }, missing: ['e'] });
+  });
+
+  it('mẫu công thức thiếu số liệu thì liệt kê đại lượng thiếu dù AI không báo', async () => {
+    stubFetch(reply('{"status":"success","templateId":"cong-suat","params":{"A":3000,"find":1},"asks":["công suất"],"summary":""}'));
+    const res = await make().extractExperiment('Một người thực hiện công 3000 J. Tính công suất.');
+    expect(res.parts[0].missing).toEqual(['t']);
+  });
+
+  it('liên kết tới câu không tồn tại thì bỏ, đại lượng đó thành thiếu', async () => {
+    stubFetch(reply(JSON.stringify({
+      status: 'success', summary: '', asks: [],
+      parts: [{ templateId: 'cong-suat', params: { t: 30, find: 1 }, links: { A: '3.A' } }]
+    })));
+    const res = await make().extractExperiment('đề');
+    expect(res.parts[0].links).toEqual({});
+    expect(res.parts[0].missing).toEqual(['A']);
+  });
+
   it('nhận kết quả hợp lệ và giữ đúng tham số của mẫu', async () => {
     stubFetch(reply('{"status":"success","templateId":"toc-do","params":{"s":1500,"t":300,"find":1},"asks":["tốc độ v"],"summary":"Tóm tắt"}'));
     const res = await make().extractExperiment('đề');

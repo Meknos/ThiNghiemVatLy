@@ -4,7 +4,7 @@ import { createApp, createRateLimiter, rateLimitFromEnv } from './app';
 const fakeProvider = {
   usingAi: false,
   description: 'dò từ khóa',
-  extractExperiment: async () => ({ status: 'success' as const, source: 'keyword' as const, templateId: 'toc-do', params: {}, asks: [], summary: '', notes: [] })
+  extractExperiment: async () => ({ status: 'success' as const, source: 'keyword' as const, templateId: 'toc-do', params: {}, asks: [], summary: '', notes: [], parts: [] })
 };
 
 const post = (app: ReturnType<typeof createApp>, prompt: unknown, ip = '1.2.3.4') =>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ExperimentTemplate } from '../core/types';
 import { ParamPanel } from './ParamPanel';
 import { ResultPanel } from './ResultPanel';
@@ -13,6 +13,8 @@ interface ExperimentLayoutProps {
   generating?: boolean;
   /** Tham số trích từ đề bài, ghi đè lên giá trị mặc định của mẫu. */
   presetParams?: Record<string, number>;
+  /** Báo số liệu đang dùng mỗi khi giáo viên chỉnh, để câu sau của đề lấy được kết quả mới nhất */
+  onValuesChange?: (values: Record<string, number>) => void;
 }
 
 const GROUPS = ['Cơ học', 'Quang học', 'Điện học', 'Nhiệt học', 'Mở đầu & Đo lường'];
@@ -23,7 +25,8 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
   allTemplates,
   onGenerateFromContext,
   generating = false,
-  presetParams
+  presetParams,
+  onValuesChange
 }) => {
   // Giá trị mặc định của mẫu, rồi đến các tham số trích từ đề bài (nếu có)
   const initialParams = useMemo(() => {
@@ -52,6 +55,10 @@ export const ExperimentLayout: React.FC<ExperimentLayoutProps> = ({
   const validation = useMemo(() => {
     return validateParams(template.params, paramValues);
   }, [template, paramValues]);
+
+  useEffect(() => {
+    onValuesChange?.(validation.cleanedParams);
+  }, [validation.cleanedParams, onValuesChange]);
 
   const computedOutputs = useMemo(() => {
     try {

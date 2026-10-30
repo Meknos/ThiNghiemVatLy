@@ -374,11 +374,11 @@ export const FORMULAS: FormulaDef[] = [
     title: 'Công Cơ Học',
     group: 'Cơ học',
     topic: 'Công',
-    target: { key: 'A', symbol: 'A', latex: 'A', label: 'Công', unit: 'J', min: 0, max: 100000, step: 1, defaultVal: 500, alt: { unit: 'kJ', factor: 0.001 } },
+    target: { key: 'A', symbol: 'A', latex: 'A', label: 'Công', unit: 'J', min: 0, max: 1000000000, step: 1, defaultVal: 500, alt: { unit: 'kJ', factor: 0.001 } },
     coef: 1,
     factors: [
-      { key: 'F', symbol: 'F', latex: 'F', label: 'Lực tác dụng', unit: 'N', min: 1, max: 2000, step: 1, defaultVal: 100, exp: 1 },
-      { key: 's', symbol: 's', latex: 's', label: 'Quãng đường dịch chuyển', unit: 'm', min: 0.1, max: 200, step: 0.1, defaultVal: 5, exp: 1 }
+      { key: 'F', symbol: 'F', latex: 'F', label: 'Lực tác dụng', unit: 'N', min: 1, max: 1000000, step: 1, defaultVal: 100, exp: 1 },
+      { key: 's', symbol: 's', latex: 's', label: 'Quãng đường dịch chuyển', unit: 'm', min: 0.1, max: 100000, step: 0.1, defaultVal: 5, exp: 1 }
     ],
     latex: 'A = F \\cdot s',
     conditions: 'Lực không đổi và cùng hướng với chuyển động. Nếu vật không dịch chuyển, hoặc lực vuông góc với hướng chuyển động, thì lực không sinh công.',
@@ -390,11 +390,11 @@ export const FORMULAS: FormulaDef[] = [
     title: 'Công Suất',
     group: 'Cơ học',
     topic: 'Công suất',
-    target: { key: 'P', symbol: '𝒫', latex: '\\mathcal{P}', label: 'Công suất', unit: 'W', min: 0, max: 100000, step: 1, defaultVal: 100, alt: { unit: 'kW', factor: 0.001 } },
+    target: { key: 'P', symbol: '𝒫', latex: '\\mathcal{P}', label: 'Công suất', unit: 'W', min: 0, max: 10000000, step: 1, defaultVal: 100, alt: { unit: 'kW', factor: 0.001 } },
     coef: 1,
     factors: [
-      { key: 'A', symbol: 'A', latex: 'A', label: 'Công thực hiện', unit: 'J', min: 1, max: 1000000, step: 1, defaultVal: 3000, exp: 1, alt: { unit: 'kJ', factor: 0.001 } },
-      { key: 't', symbol: 't', latex: 't', label: 'Thời gian', unit: 's', min: 1, max: 3600, step: 1, defaultVal: 30, exp: -1, alt: { unit: 'phút', factor: 1 / 60 } }
+      { key: 'A', symbol: 'A', latex: 'A', label: 'Công thực hiện', unit: 'J', min: 1, max: 1000000000, step: 1, defaultVal: 3000, exp: 1, alt: { unit: 'kJ', factor: 0.001 } },
+      { key: 't', symbol: 't', latex: 't', label: 'Thời gian', unit: 's', min: 1, max: 86400, step: 1, defaultVal: 30, exp: -1, alt: { unit: 'phút', factor: 1 / 60 } }
     ],
     latex: '\\mathcal{P} = \\frac{A}{t}',
     conditions: 'Công suất cho biết công thực hiện trong một giây: 1 W = 1 J/s. Thời gian tính bằng giây.',

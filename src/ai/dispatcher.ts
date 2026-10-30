@@ -104,8 +104,28 @@ const EARLY_FORMULA_ROUTES: [(text: string) => boolean, string][] = [
   [(t) => /áp suất/.test(t) && asks('(diện tích|áp lực|khối lượng|trọng lượng)').test(t) && !/chất lỏng|độ sâu|nước|dầu/.test(t), 'ap-suat']
 ];
 
+/**
+ * Chủ đề chưa có thí nghiệm nào trong danh mục. Dò từ khóa gặp các chủ đề này thì báo
+ * "chưa hỗ trợ" (templateId rỗng) thay vì rơi xuống phòng thí nghiệm lực và chuyển động.
+ */
+const UNSUPPORTED_TOPICS: [RegExp, string][] = [
+  [/nam châm|từ trường|từ cực|cực bắc|cực nam|la bàn|đường sức từ|cảm ứng điện từ|dòng điện cảm ứng|động cơ điện một chiều/, 'nam châm, từ trường và cảm ứng điện từ'],
+  [/phản ứng hóa học|nguyên tử|phân tử|axit|bazơ|ôxi hóa|oxi hóa|hóa trị|kim loại kiềm|chất xúc tác/, 'hóa học'],
+  [/tế bào|quang hợp|hô hấp|vi khuẩn|di truyền|gen\b|enzim|enzyme|tiêu hóa|sinh sản/, 'sinh học']
+];
+
 export function dispatchContextToTemplate(prompt: string): DispatchResult {
   const text = normalizeText(prompt);
+
+  for (const [pattern, topic] of UNSUPPORTED_TOPICS) {
+    if (pattern.test(text)) {
+      return {
+        templateId: '',
+        confidence: 0.9,
+        message: `Đề thuộc chủ đề ${topic}, hiện chưa có thí nghiệm mô phỏng trong danh mục.`
+      };
+    }
+  }
 
   // Bản mặt song song: nhận trước cả các mẫu công thức vì đề hay nhắc "chiết suất"
   if (/(hai|2) mặt song song|mặt song song|bản mặt/.test(text) && /(tia sáng|ánh sáng|chiết suất|khúc xạ|thủy tinh)/.test(text)) {
@@ -141,6 +161,8 @@ export function dispatchContextToTemplate(prompt: string): DispatchResult {
     put(extracted, 'V_cm3', numberBefore(text, ['cm3', 'cm³', 'ml']));
     put(extracted, 'm_kg', numberBefore(text, ['kg', 'kilogram']));
     put(extracted, 'd_liquid', liquidWeight(text));
+    // "Chìm hoàn toàn", "nhúng chìm", "ngập trong nước": toàn bộ thể tích ở trong chất lỏng
+    if (/chìm (hoàn toàn|hẳn)|nhúng chìm|ngập (hoàn toàn|trong)|chìm trong/.test(text)) extracted.immersed = 100;
 
     return {
       templateId: 'luc-day-archimedes',
@@ -207,10 +229,14 @@ export function dispatchContextToTemplate(prompt: string): DispatchResult {
     text.includes('phản xạ toàn phần') ||
     // tia sáng đi từ môi trường này sang môi trường khác
     (/tia sáng|ánh sáng|laser|laze/.test(text) &&
-      /vào (trong )?(nước|thủy tinh|kim cương)|(từ|ra|sang) không khí/.test(text))
+      /vào (trong )?(nước|thủy tinh|kim cương)|(từ|ra|sang) không khí|mặt (nước|thủy tinh|phân cách)|(khối|tấm|miếng|bản) thủy tinh/.test(text))
   ) {
     const extracted: Record<string, number> = {};
     put(extracted, 'i', numberBefore(text, ['độ', '°', 'deg']));
+    // Đề không ghi số góc: tia vuông góc với mặt phân cách thì góc tới 0; tia song song, đi sát mặt thì
+    // góc tới gần 90°, lấy giá trị lớn nhất thí nghiệm mô phỏng được
+    if (extracted.i === undefined && /vuông góc/.test(text)) extracted.i = 0;
+    else if (extracted.i === undefined && /song song với (bề |mặt )?mặt|đi sát (bề )?mặt|là là/.test(text)) extracted.i = 85;
     put(extracted, 'n', refractiveIndex(text) ?? mediumIndex(text));
     if (/(ra|sang) không khí/.test(text) || text.includes('phản xạ toàn phần')) extracted.direction = 2;
 

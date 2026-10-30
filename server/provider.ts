@@ -5,6 +5,7 @@ import { FORMULAS } from '../src/experiments/cong-thuc/formulas';
 import { getExperimentById } from '../src/core/registry';
 import { validateParams } from '../src/core/validate';
 import { buildSystemPrompt } from './prompt';
+import { ProblemPart, formulaMissing, keywordParts } from '../src/core/parts';
 
 /** Kết quả trả về cho trình duyệt. */
 export interface AiResponse {
@@ -18,6 +19,11 @@ export interface AiResponse {
   suggestedTemplateId?: string;
   /** Ghi chú cho giáo viên: số liệu bị chỉnh về khoảng cho phép, lý do dùng dò từ khóa... */
   notes: string[];
+  /**
+   * Các câu hỏi của đề, mỗi câu một thí nghiệm. templateId, params ở trên là của câu đầu tiên
+   * (giữ để tương thích với bản cũ).
+   */
+  parts: ProblemPart[];
 }
 
 export interface AiProvider {
@@ -32,12 +38,7 @@ export class KeywordProvider implements AiProvider {
   constructor(private reason = 'Chưa cấu hình khóa API nên chỉ dò từ khóa trong đề bài.') {}
 
   async extractExperiment(prompt: string): Promise<AiResponse> {
-    const dispatch = dispatchContextToTemplate(prompt);
-    return finalize(
-      { templateId: dispatch.templateId, params: dispatch.extractedParams ?? {}, asks: [], summary: dispatch.message },
-      'keyword',
-      [this.reason]
-    );
+    return finalize(keywordExtraction(prompt), 'keyword', [this.reason]);
   }
 }
 
@@ -48,15 +49,54 @@ export class KeywordProvider implements AiProvider {
 ------------------------------------------------------------------ */
 
 // Mô hình trả JSON tự do (JSON mode không ép khuôn), nên mọi trường đều được kiểm tra lại ở đây
-const ExtractionSchema = z.object({
-  status: z.enum(['success', 'unsupported']).catch('success'),
+const PartSchema = z.object({
   templateId: z.string(),
+  title: z.string().catch(''),
   params: z.record(z.string(), z.coerce.number()).catch({}),
-  asks: z.array(z.string()).catch([]),
-  summary: z.string().catch('')
+  /** "A": "1.A" nghĩa là tham số A lấy đại lượng A tính được ở câu 1 */
+  links: z.record(z.string(), z.string()).catch({}),
+  missing: z.array(z.string()).catch([]),
+  asks: z.array(z.string()).catch([])
 });
 
-type Extraction = z.infer<typeof ExtractionSchema>;
+const RawSchema = z.object({
+  status: z.enum(['success', 'unsupported']).catch('success'),
+  templateId: z.string().catch(''),
+  params: z.record(z.string(), z.coerce.number()).catch({}),
+  asks: z.array(z.string()).catch([]),
+  missing: z.array(z.string()).catch([]),
+  summary: z.string().catch(''),
+  parts: z.array(z.unknown()).catch([])
+});
+
+type RawPart = z.infer<typeof PartSchema>;
+
+/** Kết quả đã chuẩn hóa: luôn có danh sách câu, kể cả khi mô hình trả theo khuôn một câu kiểu cũ. */
+interface Extraction {
+  status: 'success' | 'unsupported';
+  templateId: string;
+  summary: string;
+  asks: string[];
+  parts: RawPart[];
+}
+
+function toExtraction(raw: z.infer<typeof RawSchema>): Extraction | null {
+  const parts = raw.parts.flatMap((p) => {
+    const r = PartSchema.safeParse(p);
+    return r.success ? [r.data] : [];
+  });
+  if (parts.length === 0 && raw.templateId) {
+    parts.push({ templateId: raw.templateId, title: '', params: raw.params, links: {}, missing: raw.missing, asks: raw.asks });
+  }
+  if (parts.length === 0 && raw.status === 'success') return null;
+  return {
+    status: raw.status,
+    templateId: raw.templateId || parts[0]?.templateId || '',
+    summary: raw.summary,
+    asks: raw.asks.length ? raw.asks : parts.flatMap((p) => p.asks),
+    parts
+  };
+}
 
 /** Lỗi khi gọi dịch vụ AI, kèm câu giải thích dành cho giáo viên. */
 class AiCallError extends Error {
@@ -165,8 +205,8 @@ export class ChatApiProvider implements AiProvider {
     const end = cleaned.lastIndexOf('}');
     if (start < 0 || end <= start) return null;
     try {
-      const result = ExtractionSchema.safeParse(JSON.parse(cleaned.slice(start, end + 1)));
-      return result.success ? result.data : null;
+      const result = RawSchema.safeParse(JSON.parse(cleaned.slice(start, end + 1)));
+      return result.success ? toExtraction(result.data) : null;
     } catch {
       return null;
     }
@@ -196,7 +236,7 @@ export class ChatApiProvider implements AiProvider {
 
     // Số liệu vượt giới hạn của mẫu đã chọn (ví dụ xe tăng 34 tấn ở thí nghiệm khối hộp tối đa 100 kg):
     // hỏi lại một lần để mô hình chọn mẫu chứa được số liệu, thay vì cắt số làm sai đề
-    const overflow = parsed.status === 'success' ? outOfRange(parsed) : [];
+    const overflow = parsed.status === 'success' ? parsed.parts.flatMap(outOfRange) : [];
     if (overflow.length > 0) {
       const retry = this.parse(
         await this.chat([
@@ -204,14 +244,14 @@ export class ChatApiProvider implements AiProvider {
           { role: 'assistant', content: text },
           {
             role: 'user',
-            content: `Số liệu vượt khoảng cho phép của mẫu "${parsed.templateId}": ${overflow.join('; ')}. Nếu danh mục có mẫu khác chứa được đúng số liệu này (thường là mẫu công thức tương ứng), hãy chọn mẫu đó và trả lại đúng một đối tượng JSON theo khuôn. Nếu không có mẫu nào khác phù hợp thì trả lại nguyên câu trả lời cũ.`
+            content: `Số liệu vượt khoảng cho phép của mẫu đã chọn: ${overflow.join('; ')}. Nếu danh mục có mẫu khác chứa được đúng số liệu này (thường là mẫu công thức tương ứng), hãy chọn mẫu đó và trả lại đúng một đối tượng JSON theo khuôn. Nếu không có mẫu nào khác phù hợp thì trả lại nguyên câu trả lời cũ.`
           }
         ]).catch(() => '')
       );
-      if (retry && (retry.status === 'unsupported' || outOfRange(retry).length < overflow.length)) parsed = retry;
+      if (retry && (retry.status === 'unsupported' || retry.parts.flatMap(outOfRange).length < overflow.length)) parsed = retry;
     }
 
-    const unitNotes = parsed.status === 'success' ? fixUnitSlips(parsed, prompt) : [];
+    const unitNotes = parsed.status === 'success' ? parsed.parts.flatMap((part) => fixUnitSlips(part, prompt)) : [];
 
     if (parsed.status === 'unsupported') {
       return {
@@ -222,7 +262,8 @@ export class ChatApiProvider implements AiProvider {
         asks: parsed.asks,
         summary: parsed.summary,
         suggestedTemplateId: getExperimentById(parsed.templateId)?.id,
-        notes: []
+        notes: [],
+        parts: []
       };
     }
     return finalize(parsed, 'ai', unitNotes);
@@ -269,46 +310,99 @@ function outOfRange(raw: { templateId: string; params: Record<string, number> })
   for (const [key, value] of Object.entries(raw.params)) {
     const def = template.params[key];
     if (!def || !Number.isFinite(value)) continue;
-    if (value < def.min || value > def.max) out.push(`${key} = ${value} (cho phép ${def.min} đến ${def.max})`);
+    if (value < def.min || value > def.max) out.push(`${raw.templateId}: ${key} = ${value} (cho phép ${def.min} đến ${def.max})`);
   }
   return out;
+}
+
+/** Dò từ khóa: tách câu và tìm số liệu thiếu theo keywordParts. */
+function keywordExtraction(prompt: string): Extraction {
+  const { parts, message } = keywordParts(prompt);
+  return {
+    status: parts.length ? 'success' : 'unsupported',
+    templateId: parts[0]?.templateId ?? '',
+    summary: message,
+    asks: [],
+    // Liên kết viết lại theo khuôn của AI ("1.A") để finalize kiểm tra chung một đường
+    parts: parts.map((part) => ({
+      ...part,
+      links: Object.fromEntries(Object.entries(part.links).map(([key, link]) => [key, `${link.from + 1}.${link.quantity}`]))
+    }))
+  };
 }
 
 /* ------------------------------------------------------------------
    Kiểm tra lại mọi tham số, dù đến từ mô hình hay từ dò từ khóa
 ------------------------------------------------------------------ */
 
-function finalize(
-  raw: { templateId: string; params: Record<string, number>; asks: string[]; summary: string },
-  source: AiResponse['source'],
-  notes: string[]
-): AiResponse {
-  const template = getExperimentById(raw.templateId);
-  if (!template) {
-    return { status: 'unsupported', source, templateId: '', params: {}, asks: raw.asks, summary: raw.summary, notes };
-  }
+function finalize(raw: Extraction, source: AiResponse['source'], notes: string[]): AiResponse {
+  const parts: ProblemPart[] = [];
+  // Câu thô thứ k nằm ở vị trí nào trong danh sách câu đã nhận (để nối đúng liên kết "câu k")
+  const placed = new Map<number, number>();
+  const many = raw.parts.length > 1;
 
-  // Chỉ giữ tham số mà mẫu có; giá trị ngoài khoảng cho phép bị đưa về biên và báo lại
-  const known: Record<string, number> = {};
-  for (const [key, value] of Object.entries(raw.params)) {
-    if (template.params[key] && Number.isFinite(value)) known[key] = value;
-    else notes.push(`Bỏ qua "${key}": mẫu thí nghiệm không có tham số này.`);
-  }
-  const defs: Record<string, any> = {};
-  for (const key of Object.keys(known)) defs[key] = template.params[key];
-  const checked = validateParams(defs, known);
-  for (const message of Object.values(checked.errors)) {
-    notes.push(`${message}. Thí nghiệm dùng giá trị ở biên nên kết quả không còn khớp hoàn toàn với đề.`);
+  raw.parts.forEach((rawPart, k) => {
+    const template = getExperimentById(rawPart.templateId);
+    const label = many ? `Câu ${k + 1} — ` : '';
+    if (!template) {
+      if (many) notes.push(`${label}Bỏ qua vì không có mẫu thí nghiệm "${rawPart.templateId}".`);
+      return;
+    }
+
+    // Liên kết tới câu trước: "1.A" (đại lượng A của câu 1) hoặc "A" (của câu ngay trước)
+    const links: ProblemPart['links'] = {};
+    for (const [key, ref] of Object.entries(rawPart.links)) {
+      const m = ref.trim().match(/^(?:(?:câu\s*)?(\d+)\s*[.:]\s*)?(.+)$/i);
+      const from = m ? placed.get(m[1] ? Number(m[1]) - 1 : k - 1) : undefined;
+      if (!m || from === undefined || !template.params[key] || key === 'find') continue;
+      links[key] = { from, quantity: m[2].trim() };
+    }
+
+    // Chỉ giữ tham số mà mẫu có; giá trị ngoài khoảng cho phép bị đưa về biên và báo lại
+    const known: Record<string, number> = {};
+    for (const [key, value] of Object.entries(rawPart.params)) {
+      if (links[key]) continue;
+      if (template.params[key] && Number.isFinite(value)) known[key] = value;
+      else notes.push(`${label}Bỏ qua "${key}": mẫu thí nghiệm không có tham số này.`);
+    }
+    const defs: Record<string, any> = {};
+    for (const key of Object.keys(known)) defs[key] = template.params[key];
+    const checked = validateParams(defs, known);
+    for (const message of Object.values(checked.errors)) {
+      notes.push(`${label}${message}. Thí nghiệm dùng giá trị ở biên nên kết quả không còn khớp hoàn toàn với đề.`);
+    }
+
+    const params = checked.cleanedParams;
+    // Số liệu còn thiếu: theo AI (mẫu trực quan) và theo công thức (mọi đại lượng trừ đại lượng cần tìm)
+    const missing = new Set([
+      ...rawPart.missing.filter((key) => template.params[key] && key !== 'find' && params[key] === undefined && !links[key]),
+      ...formulaMissing(template, params, Object.keys(links))
+    ]);
+
+    placed.set(k, parts.length);
+    parts.push({
+      templateId: template.id,
+      title: rawPart.title || rawPart.asks.join(', ') || template.title,
+      params,
+      links,
+      missing: [...missing],
+      asks: rawPart.asks
+    });
+  });
+
+  if (parts.length === 0) {
+    return { status: 'unsupported', source, templateId: '', params: {}, asks: raw.asks, summary: raw.summary, notes, parts: [] };
   }
 
   return {
     status: 'success',
     source,
-    templateId: template.id,
-    params: checked.cleanedParams,
+    templateId: parts[0].templateId,
+    params: parts[0].params,
     asks: raw.asks,
     summary: raw.summary,
-    notes
+    notes,
+    parts
   };
 }
 

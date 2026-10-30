@@ -274,3 +274,16 @@ function askedNear(text: string, q: Quantity, v: FormulaVar): boolean {
   if (!sym) return false;
   return new RegExp(`(?:${sym})\\s*=\\s*\\?\\s*$`).test(text.slice(Math.max(0, q.index - 12), q.index));
 }
+
+/**
+ * Đổi một giá trị giữa hai đơn vị viết như trên thanh trượt (J → kJ, cm → m...).
+ * Không nhận ra đơn vị hoặc khác loại đại lượng thì giữ nguyên số.
+ */
+export function convertUnit(value: number, from: string, to: string): number {
+  if (from === to) return value;
+  const a = unitOf(from);
+  const b = unitOf(to);
+  if (!a || !b || a.dim !== b.dim) return value;
+  const si = (value + (a.offset ?? 0)) * a.factor;
+  return Number((si / b.factor - (b.offset ?? 0)).toPrecision(10));
+}

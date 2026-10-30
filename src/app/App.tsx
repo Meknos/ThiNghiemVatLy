@@ -1,7 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { EXPERIMENT_REGISTRY, getExperimentById } from '../core/registry';
 import { ExperimentLayout } from '../components/ExperimentLayout';
-import { ExperimentRequestResult, requestExperiment } from '../ai/client';
+import { MissingDataForm } from '../components/MissingDataForm';
+import { ExperimentRequestResult, partsOf, requestExperiment } from '../ai/client';
+import { ProblemPart, resolvePartParams } from '../core/parts';
+import { ParamDef } from '../core/types';
+
+/** Một đề bài đã dựng: các câu hỏi, số liệu giáo viên tự chọn cho từng câu, câu đang mở. */
+interface Problem {
+  parts: ProblemPart[];
+  chosen: Record<string, number>[];
+  active: number;
+}
+
+/** "t = 30 s" theo cách viết số của Việt Nam */
+function describeParam(def: ParamDef, value: number): string {
+  return `${def.symbol} = ${String(Number(value.toPrecision(6))).replace('.', ',')}${def.unit ? ' ' + def.unit : ''}`;
+}
 
 export const App: React.FC = () => {
   // Sync with URL query param if present
@@ -41,11 +56,40 @@ export const App: React.FC = () => {
     source: ExperimentRequestResult['source'];
     unsupported: boolean;
     summary: string;
-    filled: string[];
     asks: string[];
     notes: string[];
     suggestion?: { id: string; title: string };
   } | null>(null);
+
+  // Đề bài đang dựng (có thể nhiều câu) và đề đang chờ giáo viên bổ sung số liệu thiếu
+  const [problem, setProblem] = useState<Problem | null>(null);
+  const [pendingParts, setPendingParts] = useState<ProblemPart[] | null>(null);
+  // Số liệu hiện tại của từng câu (giáo viên có thể đã kéo thanh trượt); câu sau lấy kết quả từ đây
+  const partValues = useRef<(Record<string, number> | undefined)[]>([]);
+  const activePart = useRef(0);
+
+  const handleValuesChange = useCallback((values: Record<string, number>) => {
+    partValues.current[activePart.current] = values;
+  }, []);
+
+  const openPart = (parts: ProblemPart[], chosen: Record<string, number>[], index: number) => {
+    activePart.current = index;
+    openExperiment(parts[index].templateId, resolvePartParams(parts, partValues.current, index));
+    setProblem({ parts, chosen, active: index });
+  };
+
+  /** Bắt đầu dựng đề: số liệu giáo viên chọn cho phần thiếu được ghép vào số liệu của từng câu. */
+  const startProblem = (parts: ProblemPart[], chosen: Record<string, number>[]) => {
+    const merged = parts.map((part, i) => ({ ...part, params: { ...part.params, ...chosen[i] } }));
+    partValues.current = [];
+    openPart(merged, chosen, 0);
+  };
+
+  // Giáo viên tự chọn thí nghiệm khác: thôi theo đề bài cũ
+  const selectExperiment = (id: string) => {
+    setProblem(null);
+    openExperiment(id);
+  };
 
   useEffect(() => {
     document.documentElement.classList.toggle('large-text', largeText);
@@ -62,18 +106,20 @@ export const App: React.FC = () => {
     if (aiBusy) return;
     setAiBusy(true);
     setAiNotice(null);
+    setPendingParts(null);
+    setProblem(null);
     try {
       const res = await requestExperiment(prompt);
       const template = getExperimentById(res.templateId);
 
       // Đề ngoài danh mục: không dựng bừa, chỉ gợi ý thí nghiệm gần nhất
-      if (res.status === 'unsupported' || !template) {
+      const parts = partsOf(res);
+      if (res.status === 'unsupported' || !template || parts.length === 0) {
         const suggested = res.suggestedTemplateId ? getExperimentById(res.suggestedTemplateId) : undefined;
         setAiNotice({
           source: res.source,
           unsupported: true,
           summary: res.summary,
-          filled: [],
           asks: [],
           notes: res.notes,
           suggestion: suggested ? { id: suggested.id, title: suggested.title } : undefined
@@ -81,20 +127,33 @@ export const App: React.FC = () => {
         return;
       }
 
-      openExperiment(template.id, res.params);
-      // Cho giáo viên thấy những số liệu đã lấy từ đề bài để kiểm tra lại
-      const filled = Object.entries(res.params)
-        // "find" chỉ là số thứ tự đại lượng cần tìm, đã hiện ở dòng "Cần tìm" nên không liệt kê như số liệu
-        .filter(([key]) => template.params[key] && key !== 'find')
-        .map(([key, value]) => {
-          const def = template.params[key];
-          return `${def.symbol} = ${String(value).replace('.', ',')}${def.unit ? ' ' + def.unit : ''}`;
-        });
-      setAiNotice({ source: res.source, unsupported: false, summary: res.summary, filled, asks: res.asks, notes: res.notes });
+      setAiNotice({ source: res.source, unsupported: false, summary: res.summary, asks: res.asks, notes: res.notes });
+      // Đề thiếu số liệu: hỏi giáo viên trước (đã điền sẵn giá trị ngẫu nhiên); đủ rồi thì dựng ngay
+      if (parts.some((part) => part.missing.length > 0)) setPendingParts(parts);
+      else startProblem(parts, parts.map(() => ({})));
     } finally {
       setAiBusy(false);
     }
   };
+
+  // Số liệu của câu đang mở, chia theo nguồn: đề cho, lấy từ câu trước, giáo viên tự chọn
+  const partDetails = (() => {
+    if (!problem) return null;
+    const part = problem.parts[problem.active];
+    const template = getExperimentById(part.templateId);
+    if (!template) return null;
+    const chosen = problem.chosen[problem.active] ?? {};
+    const line = (key: string, value: number) => describeParam(template.params[key], value);
+    return {
+      given: Object.entries(part.params)
+        .filter(([key]) => template.params[key] && key !== 'find' && chosen[key] === undefined)
+        .map(([key, value]) => line(key, value)),
+      linked: Object.entries(part.links)
+        .filter(([key]) => session.params[key] !== undefined)
+        .map(([key, link]) => `${line(key, session.params[key])} (kết quả câu ${link.from + 1})`),
+      chosen: Object.entries(chosen).filter(([key]) => template.params[key]).map(([key, value]) => line(key, value))
+    };
+  })();
 
   return (
     <div className="app-root">
@@ -119,7 +178,7 @@ export const App: React.FC = () => {
           <select
             className="header-dropdown-select"
             value={currentId}
-            onChange={(e) => openExperiment(e.target.value)}
+            onChange={(e) => selectExperiment(e.target.value)}
           >
             {EXPERIMENT_REGISTRY.map((t) => (
               <option key={t.id} value={t.id}>
@@ -161,11 +220,15 @@ export const App: React.FC = () => {
           </span>
           <div className="ai-notice-body">
             <div>{aiNotice.unsupported ? `Chưa mô phỏng được: ${aiNotice.summary}` : aiNotice.summary}</div>
-            {aiNotice.filled.length > 0 && <div><b>Đã điền từ đề:</b> {aiNotice.filled.join('; ')}</div>}
             {aiNotice.asks.length > 0 && <div><b>Cần tìm:</b> {aiNotice.asks.join('; ')}</div>}
+            {partDetails && partDetails.given.length > 0 && <div><b>Đã điền từ đề:</b> {partDetails.given.join('; ')}</div>}
+            {partDetails && partDetails.linked.length > 0 && <div><b>Lấy từ câu trước:</b> {partDetails.linked.join('; ')}</div>}
+            {partDetails && partDetails.chosen.length > 0 && (
+              <div className="ai-notice-chosen"><b>Giá trị tự chọn (đề không cho):</b> {partDetails.chosen.join('; ')}. Kéo thanh trượt để đổi.</div>
+            )}
             {aiNotice.suggestion && (
               <div>
-                <button className="ai-suggest-button" onClick={() => { openExperiment(aiNotice.suggestion!.id); setAiNotice(null); }}>
+                <button className="ai-suggest-button" onClick={() => { selectExperiment(aiNotice.suggestion!.id); setAiNotice(null); }}>
                   Mở thí nghiệm gần nhất: {aiNotice.suggestion.title}
                 </button>
               </div>
@@ -176,11 +239,42 @@ export const App: React.FC = () => {
         </div>
       )}
 
+      {/* Đề nhiều câu: mỗi câu một thí nghiệm, bấm để chuyển */}
+      {problem && problem.parts.length > 1 && (
+        <nav className="problem-steps" aria-label="Các câu hỏi của đề bài">
+          <span className="problem-steps-label">Đề có {problem.parts.length} câu:</span>
+          {problem.parts.map((part, i) => (
+            <button
+              key={i}
+              type="button"
+              className={`problem-step ${i === problem.active ? 'active' : ''}`}
+              aria-current={i === problem.active ? 'step' : undefined}
+              onClick={() => openPart(problem.parts, problem.chosen, i)}
+            >
+              <span className="problem-step-number">{i + 1}</span>
+              {part.title}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {pendingParts && (
+        <MissingDataForm
+          parts={pendingParts}
+          onCancel={() => setPendingParts(null)}
+          onConfirm={(chosen) => {
+            startProblem(pendingParts, chosen);
+            setPendingParts(null);
+          }}
+        />
+      )}
+
       {/* MAIN WORKSPACE LAYOUT */}
       <ExperimentLayout
         template={currentTemplate}
         presetParams={session.params}
-        onSelectExperiment={(id) => openExperiment(id)}
+        onSelectExperiment={selectExperiment}
+        onValuesChange={handleValuesChange}
         allTemplates={EXPERIMENT_REGISTRY}
         onGenerateFromContext={handleGenerate}
         generating={aiBusy}
